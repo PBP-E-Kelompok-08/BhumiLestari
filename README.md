@@ -2,11 +2,11 @@
 ## BhumiLestari
 | Nama | NPM | Peran |
 | --- | --- | --- |
-| Alfarrel Ersya Balawa | 2506656406 | Incoming |
-| Athifah Mufidah | 2506612045 | Incoming |
-| Nurfadhil Kurniawan | 2506540765 | Incoming |
-| Regina Gunadi | 2506542852 | Incoming |
-| Sultan Noor Dafiq | 2506600713 | Incoming |
+| Alfarrel Ersya Balawa | 2506656406 | Mock API, Modul Chat |
+| Athifah Mufidah | 2506612045 | UI/UX, Modul Checkout & Keranjang |
+| Nurfadhil Kurniawan | 2506540765 | UI/UX, Modul Profil, Login/Sign Up |
+| Regina Gunadi | 2506542852 | UI/UX, Modul Dashbord & Profile |
+| Sultan Noor Dafiq | 2506600713 | Mock API, Modul Produk |
 
 ## Deskripsi Project
 <div align = “justify>
