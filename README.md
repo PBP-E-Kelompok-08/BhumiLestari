@@ -38,3 +38,4 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 ## Public API/Mock API
 | 1. | Mock API data hasil uji produk eco-friendly tiap company partner
 | 2. | Open Router API untuk chatbot
+
