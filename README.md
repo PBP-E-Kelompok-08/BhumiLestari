@@ -36,6 +36,8 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 | 5. | Laman Keranjang & Checkout | Athifah Mufidah |
 
 ## Public API/Mock API
-| 1. | Mock API data hasil uji produk eco-friendly tiap company partner
-| 2. | Open Router API untuk chatbot
+| Nomor | API | Link |
+| --- | --- | --- |
+| 1. | Mock API data hasil uji produk eco-friendly tiap company partner| <a href="https://drive.google.com/drive/u/1/folders/1sHDq1ZUiYRcyWkg-OhxK9_KpdaMj3ptn"> Google Drive </a>
+| 2. | Open Router API untuk chatbot| <a href="https://openrouter.ai/"> OpenRouter </a>|
 
