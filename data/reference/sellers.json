@@ -1,0 +1,17 @@
+﻿[
+  {
+    "seller_id": "sel-001",
+    "name": "Bhumi Karya Bandung",
+    "origin": "Bandung, Jawa Barat"
+  },
+  {
+    "seller_id": "sel-002",
+    "name": "Lestari Rumah Jogja",
+    "origin": "Sleman, DI Yogyakarta"
+  },
+  {
+    "seller_id": "sel-003",
+    "name": "Hijau Bersama Surabaya",
+    "origin": "Surabaya, Jawa Timur"
+  }
+]

@@ -1,0 +1,162 @@
+﻿[
+  {
+    "product_id": "prd-001",
+    "name": "Tas Belanja Katun Pakai Ulang",
+    "slug": "tas-belanja-katun-pakai-ulang",
+    "category": "daily_supplies",
+    "description": "Tas belanja berbahan katun yang dirancang untuk digunakan berulang kali sebagai pengganti kantong sekali pakai.",
+    "price": 35000,
+    "stock": 40,
+    "seller_id": "sel-001",
+    "image_path": "products/prd-001.webp",
+    "materials": ["katun"],
+    "origin": "Bandung, Jawa Barat",
+    "eco_features": [
+      "reusable",
+      "plastic_free_packaging",
+      "locally_sourced"
+    ],
+    "verification": {
+      "verification_id": "ver-001",
+      "status": "verified",
+      "partner": {
+        "partner_id": "vfp-001",
+        "name": "EcoCheck Indonesia"
+      },
+      "tested_at": "2026-09-01",
+      "valid_until": "2027-09-01",
+      "recycled_material_percent": 0,
+      "reusable": true,
+      "eco_score": null,
+      "summary": "Dapat digunakan kembali dan dikemas tanpa plastik sekali pakai."
+    },
+    "is_active": true
+  },
+  {
+    "product_id": "prd-002",
+    "name": "Kaos Katun Organik",
+    "slug": "kaos-katun-organik",
+    "category": "clothing",
+    "description": "Kaos sehari-hari berbahan katun organik dengan desain sederhana dan produksi dari penjahit lokal.",
+    "price": 129000,
+    "stock": 25,
+    "seller_id": "sel-001",
+    "image_path": "products/prd-002.webp",
+    "materials": ["katun organik"],
+    "origin": "Bandung, Jawa Barat",
+    "eco_features": [
+      "organic_material",
+      "locally_sourced",
+      "plastic_free_packaging"
+    ],
+    "verification": {
+      "verification_id": "ver-002",
+      "status": "verified",
+      "partner": {
+        "partner_id": "vfp-002",
+        "name": "Lembaga Verifikasi Bhumi"
+      },
+      "tested_at": "2026-09-03",
+      "valid_until": "2027-09-03",
+      "recycled_material_percent": 0,
+      "reusable": true,
+      "eco_score": null,
+      "summary": "Menggunakan katun organik dan diproduksi oleh penjahit lokal."
+    },
+    "is_active": true
+  },
+  {
+    "product_id": "prd-003",
+    "name": "Kotak Makan Bambu",
+    "slug": "kotak-makan-bambu",
+    "category": "home_kitchen",
+    "description": "Kotak makan berbahan bambu dan baja tahan karat yang dapat digunakan berulang kali untuk membawa makanan.",
+    "price": 89000,
+    "stock": 32,
+    "seller_id": "sel-002",
+    "image_path": "products/prd-003.webp",
+    "materials": ["bambu", "baja tahan karat"],
+    "origin": "Sleman, DI Yogyakarta",
+    "eco_features": [
+      "reusable",
+      "locally_sourced",
+      "plastic_free_packaging"
+    ],
+    "verification": {
+      "verification_id": "ver-003",
+      "status": "verified",
+      "partner": {
+        "partner_id": "vfp-001",
+        "name": "EcoCheck Indonesia"
+      },
+      "tested_at": "2026-09-05",
+      "valid_until": "2027-09-05",
+      "recycled_material_percent": null,
+      "reusable": true,
+      "eco_score": null,
+      "summary": "Dirancang untuk pemakaian berulang dengan material bambu dari sumber lokal."
+    },
+    "is_active": true
+  },
+  {
+    "product_id": "prd-004",
+    "name": "Meja Samping Kayu Daur Ulang",
+    "slug": "meja-samping-kayu-daur-ulang",
+    "category": "furniture",
+    "description": "Meja samping berukuran ringkas yang dibuat dari potongan kayu bekas produksi furnitur.",
+    "price": 425000,
+    "stock": 10,
+    "seller_id": "sel-002",
+    "image_path": "products/prd-004.webp",
+    "materials": ["kayu daur ulang"],
+    "origin": "Sleman, DI Yogyakarta",
+    "eco_features": [
+      "recycled_material",
+      "locally_sourced"
+    ],
+    "verification": {
+      "verification_id": "ver-004",
+      "status": "verified",
+      "partner": {
+        "partner_id": "vfp-002",
+        "name": "Lembaga Verifikasi Bhumi"
+      },
+      "tested_at": "2026-09-07",
+      "valid_until": "2027-09-07",
+      "recycled_material_percent": 85,
+      "reusable": true,
+      "eco_score": null,
+      "summary": "Sebagian besar material berasal dari potongan kayu bekas produksi furnitur."
+    },
+    "is_active": true
+  },
+  {
+    "product_id": "prd-005",
+    "name": "Sampo Cair Isi Ulang",
+    "slug": "sampo-cair-isi-ulang",
+    "category": "beauty_care",
+    "description": "Sampo cair dalam kemasan yang dapat diisi ulang untuk membantu mengurangi penggunaan kemasan sekali pakai.",
+    "price": 58000,
+    "stock": 45,
+    "seller_id": "sel-003",
+    "image_path": "products/prd-005.webp",
+    "materials": ["surfaktan berbasis tumbuhan", "botol aluminium"],
+    "origin": "Surabaya, Jawa Timur",
+    "eco_features": [
+      "refillable",
+      "reusable"
+    ],
+    "verification": {
+      "verification_id": "ver-005",
+      "status": "pending",
+      "partner": null,
+      "tested_at": null,
+      "valid_until": null,
+      "recycled_material_percent": null,
+      "reusable": true,
+      "eco_score": null,
+      "summary": "Klaim produk sedang menunggu proses verifikasi."
+    },
+    "is_active": true
+  }
+]

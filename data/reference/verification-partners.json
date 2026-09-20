@@ -1,0 +1,12 @@
+﻿[
+  {
+    "partner_id": "vfp-001",
+    "name": "EcoCheck Indonesia",
+    "is_mock": true
+  },
+  {
+    "partner_id": "vfp-002",
+    "name": "Lembaga Verifikasi Bhumi",
+    "is_mock": true
+  }
+]
