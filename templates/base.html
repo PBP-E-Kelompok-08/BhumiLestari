@@ -1,0 +1,54 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&family=Noto+Sans+Kannada:wght@100..900&family=Prompt:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block meta %} {% endblock meta %}
+</head>
+
+<body>
+    <header class="site-header">
+        <nav class="container">
+            <div class="container-left">
+                <img class="menu" src="{% static 'img/hamburger.png' %}" alt="Menu">
+
+                <a href="{% url 'dashboard:show_dashboard_home' %}">
+                    <img class="logo" src="{% static "img/logo.png" %}" alt="Logo">
+                    BhumiLestari
+                </a>
+            </div> 
+        
+            <div class="container-right">
+                <form id="search-form" method="get" action="" class="search">
+                    <input id="search-input"
+                        type="search"
+                        name="title"
+                        value=""
+                        placeholder="Cari produk Anda di sini..."
+                        class="search__input"
+                        aria-label="Cari produk Anda di sini...">
+                </form>
+
+                <img class="notif" src="{% static 'img/notif.png' %}" alt="Notification">
+                <img class="question" src="{% static 'img/question.png' %}" alt="Question">
+
+                <button class="button-nav" type="button">Login</button>
+                <button class="button-nav" type="button">Daftar</button>
+            </div>
+        </nav>
+    </header>
+    
+    {% block content %} {% endblock content %}
+
+    <footer> 
+        <div class="site-footer">
+            <p>Made with Love - PBP E Team 8</p>
+        </div>
+    </footer>
+</body> 
+</html>
