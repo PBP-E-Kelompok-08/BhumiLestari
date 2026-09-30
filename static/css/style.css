@@ -1,0 +1,99 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --paper: #E9F3CF;
+    --ink: #4D665D;
+    --secondpaper: #ADC178;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Changa', sans-serif;
+    color: var(--ink);
+    background-color: var(--paper);
+}
+
+/* Styling Base: Header */
+.site-header .container {
+    background-color: var(--secondpaper);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.625rem 1.5rem;
+}
+
+.site-header .container-left,
+.site-header .container-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.site-header a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 1.125rem;
+}
+
+.button-nav {
+    display: inline-block;
+    height: 2rem;
+    padding: 0 1rem;
+    border: none;
+    background: var(--ink);
+    color: white;
+    cursor: pointer;
+    font-family: "Prompt", sans-serif;
+}
+
+.search {
+    display: flex;
+    gap: 1rem;
+}
+
+.search__input {
+    width: 20rem;
+    max-width: 100%;
+    padding: 0.7rem;
+    border: none;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Prompt", sans-serif;
+}
+
+.logo {
+    height: 3rem;
+}
+
+.notif,
+.question {
+    height: 1.5rem;
+}
+
+.menu {
+    height: 1.5rem;
+}
+
+p {
+    font-family: 'Prompt', sans-serif;
+}
+
+/* Styling Base: Footer */
+footer {
+    margin-top: auto;
+}
+
+.site-footer {
+    background-color: var(--secondpaper);
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+}
