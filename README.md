@@ -3,10 +3,10 @@
 | Nama | NPM | Peran |
 | --- | --- | --- |
 | Alfarrel Ersya Balawa | 2506656406 | Mock API, Modul Chat |
-| Athifah Mufidah | 2506612045 | UI/UX, Modul Checkout & Keranjang |
-| Nurfadhil Kurniawan | 2506540765 | UI/UX, Modul Profil, Login/Sign Up |
-| Regina Gunadi | 2506542852 | UI/UX, Modul Dashbord & Profile |
-| Sultan Noor Dafiq | 2506600713 | Mock API, Modul Produk |
+| Athifah Mufidah | 2506612045 | UI/UX, Modul Keranjang |
+| Nurfadhil Kurniawan | 2506540765 | UI/UX, Modul User |
+| Regina Gunadi | 2506542852 | UI/UX, Modul Produk |
+| Sultan Noor Dafiq | 2506600713 | Mock API, Modul Ulasan Toko |
 
 ## Deskripsi Project
 <div align = “justify>
@@ -27,13 +27,22 @@ Akses terhadap produk eco-friendly di Indonesia masih cukup terbatas karena belu
 https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr0Q4jTZKSs9HeeM-0
 
 ## Daftar Modul
-| Nomor | Modul | Pemilik |
-| --- | --- | --- |
-| 1. | Laman Profile, Login/Sign Up Pembeli/Penjual | Nurfadhil Kurniawan |
-| 2. | Laman Dashboard dan Profile Admin & Penjual | Regina Gunadi |
-| 3. | Laman Chat Penjual/Pembeli | Alfarrel Ersya Balawa |
-| 4. | Laman Detail Produk + Ulasan + Rating Produk + Katalog | Sultan Noor Dafiq |
-| 5. | Laman Keranjang & Checkout | Athifah Mufidah |
+| Nomor | Modul | Fungsi | Pemilik |
+| --- | --- | --- | --- |
+| 1. | User | Laman Profile, Login/Sign Up Pembeli/Penjual | Nurfadhil Kurniawan |
+| 2. | Produk | Laman Katalog Produk | Regina Gunadi |
+| 3. | Chat | Laman Chat Penjual/Pembeli | Alfarrel Ersya Balawa |
+| 4. | Ulasan Toko | Laman Ulasan + Rating Toko | Sultan Noor Dafiq |
+| 5. | Keranjang | Laman Keranjang & Checkout | Athifah Mufidah |
+
+## CRUD Tiap Modul
+| Modul | Create | Read | Update | Delete|
+| --- | --- | --- | --- | --- |
+| User | Sign Up membuat user baru (seller/buyer) | Melihat profil diri sendiri / user lain | Mengupdate profil diri sendiri | Menghapus akun |
+| Produk | Membuat produk (seller) | Melihat produk | Mengedit detail produk (seller) | Menghapus produk (seller) |
+| Chat | Membuat session chat baru antara buyer dan seller | Melihat isi chat dan list chat session | Mengupdate isi chat ketika chat baru terkirim | Menghapus chat yang sudah dikirim |
+| Ulasan Toko | Membuat ulasan (buyer) | Melihat ulasan toko yang ada | Mengupdate ulasan yang diposting kurang dari 7 hari (buyer) | Menghapus ulasan yang telah dibuat (buyer) |
+| Keranjang | Menambah barang ke keranjang | Melihat keranjangnya sendiri | Mengupdate jumlah produk di keranjang | Menghapus produk dari keranjang |
 
 ## Public API/Mock API
 | Nomor | API | Link |
