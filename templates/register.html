@@ -1,0 +1,79 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - BhumiLestari</title>
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body>
+    <div class="auth-card">
+
+        <!-- Sisi Kiri (Banner) -->
+        <div class="auth-banner">
+            <div class="auth-logo">🌼</div>
+            <h1 class="auth-brand">BhumiLestari</h1>
+            <p class="auth-tagline">Produk ramah lingkungan, untuk masa depan yang lebih baik.</p>
+        </div>
+
+        <!-- Sisi Kanan (Formulir) -->
+        <div class="auth-form-wrap">
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" id="registerForm" data-otp-url="{% url 'users:send_otp_api' %}">
+                {% csrf_token %}
+                <input type="hidden" name="role" id="roleInput" value="seller">
+
+                <!-- Toggle Role -->
+                <div class="role-toggle">
+                    <button type="button" id="btnPenjual" class="role-btn active">Penjual</button>
+                    <button type="button" id="btnPembeli" class="role-btn">Pembeli</button>
+                </div>
+
+                <div class="field">
+                    <input type="text" name="full_name" class="input" placeholder="Nama" required>
+                </div>
+
+                <!-- Nama Toko (Penjual) / Username (Pembeli) -->
+                <div class="field" id="fieldNamaToko">
+                    <input type="text" name="store_name" id="inputStoreName" class="input" placeholder="Nama Toko" required>
+                </div>
+                <div class="field hidden" id="fieldUsername">
+                    <input type="text" name="username" id="inputUsername" class="input" placeholder="Username">
+                </div>
+
+                <div class="field">
+                    <input type="email" name="email" id="emailInput" class="input" placeholder="Email" required>
+                </div>
+
+                <!-- OTP + tombol kirim -->
+                <div class="field with-btn">
+                    <input type="text" name="otp_code" class="input has-btn" placeholder="OTP" required>
+                    <button type="button" id="btnSendOtp" class="btn-otp">Kirim OTP</button>
+                </div>
+
+                <div class="field">
+                    <input type="password" name="password" id="passInput" class="input" placeholder="Password" required>
+                </div>
+                <div class="field last">
+                    <input type="password" name="confirm_password" id="confirmPassInput" class="input" placeholder="Confirm Password" required>
+                </div>
+
+                <button type="submit" class="btn-submit">Sign Up</button>
+
+                <p class="auth-footer">
+                    Already have an account? <a href="{% url 'users:login' %}">Login</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <script src="{% static 'js/register.js' %}"></script>
+</body>
+</html>

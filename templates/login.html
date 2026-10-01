@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - BhumiLestari</title>
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body>
+    <div class="auth-card">
+
+        <!-- Sisi Kiri (Banner) -->
+        <div class="auth-banner">
+            <div class="auth-logo">🌼</div>
+            <h1 class="auth-brand">BhumiLestari</h1>
+            <p class="auth-tagline">Produk ramah lingkungan, untuk masa depan yang lebih baik.</p>
+        </div>
+
+        <!-- Sisi Kanan (Formulir) -->
+        <div class="auth-form-wrap">
+            <h2 class="auth-title">Selamat Datang Kembali</h2>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" id="loginForm">
+                {% csrf_token %}
+
+                <div class="field">
+                    <input type="email" name="email" class="input" placeholder="Email" required autofocus>
+                </div>
+                <div class="field last">
+                    <input type="password" name="password" class="input" placeholder="Password" required>
+                </div>
+
+                <button type="submit" class="btn-submit">Login</button>
+
+                <p class="auth-footer">
+                    Belum punya akun? <a href="{% url 'users:register' %}">Sign Up</a>
+                </p>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
