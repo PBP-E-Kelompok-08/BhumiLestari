@@ -7,7 +7,55 @@
 {% endblock meta %}
 
 {% block content %}
-<main class="dash-page role-seller">
+<script src="{% static 'js/dashboard.js' %}"></script>
+
+<div class="dash-layout role-seller">    
+<!-- Sidebarnya role seller --> 
+<aside class="dash-sidebar dash-sidebar-seller">
+    <ul class="dash-menu">
+        <li><a href="#">Katalog</a></li>
+        <li><a href="#">Ringkasan</a></li>
+        <li><a href="#">Transaksi / Pesanan</a></li>
+        <li><a href="#">Laporan Penjualan</a></li>
+        <li><a href="#">Managemen Chat</a></li>
+    </ul>
+
+    <div class="dash-sidebar-user">
+        <img class="dash-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+        <div><strong>Toko Eco Friendly</strong>Penjual</div>
+        <button type="button" class="dash-gear" aria-label="Menu pengguna">
+            <img src="{% static 'img/settings.png' %}" alt="">
+        </button>
+        <ul class="dash-user-menu" hidden>
+            <li><a href="#">Pengaturan Akun</a></li>
+            <li><a href="#">Keluar</a></li>
+        </ul>
+    </div>
+</aside>
+
+<!-- Sidebarnya role buyer -->
+<aside class="dash-sidebar dash-sidebar-buyer">
+    <ul class="dash-menu">
+        <li><a href="#" class="active">Katalog</a></li>
+        <li><a href="#">Keranjang</a></li>
+        <li><a href="#">Chat</a></li>
+        <li><a href="#">Riwayat pembelian</a></li>
+    </ul>
+
+    <div class="dash-sidebar-user">
+        <img class="dash-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+        <div><strong>Udin</strong>Pembeli</div>
+        <button type="button" class="dash-gear" aria-label="Menu pengguna">
+            <img src="{% static 'img/settings.png' %}" alt="">
+        </button>
+        <ul class="dash-user-menu" hidden>
+            <li><a href="#">Pengaturan Akun</a></li>
+            <li><a href="#">Keluar</a></li>
+        </ul>
+    </div>
+</aside>
+
+<main class="dash-page">
     <h1 class="dash-title">Produk Toko Eco Friendly</h1>
 
     <div class="dash-toolbar">
@@ -53,4 +101,5 @@
         </article>
     </div>
 </main>
+</div>
 {% endblock content %}
