@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
-from django.contrib.auth import login, authenticate, get_user_model
+from django.contrib.auth import login, authenticate, get_user_model, logout
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.views.decorators.http import require_POST
@@ -96,12 +96,22 @@ def login_view(request):
     if request.method == 'POST':
         email = request.POST.get('email')
         password = request.POST.get('password')
-
         user = authenticate(request, username=email, password=password)
-        if user is not None:
-            login(request, user)
-            messages.success(request, f'Selamat datang, {user.full_name or user.email}!')
-            return redirect('dashboard')
-        else:
-            messages.error(request, 'Email atau password salah!')
+
+        if user is None:
+            messages.error(request, "Email atau password salah!")
+            return redirect('users:login')
+
+        if user.role == 'seller':
+            messages.warning(request, 'Maaf, halaman penjual sedang dalam maintenance.')
+            return redirect('users:login')
+
+        login(request, user)
+        return redirect('dashboard:show_dashboard_home')
+    
     return render(request, 'login.html')
+
+@require_POST
+def logout_view(request):
+    logout(request)
+    return redirect('dashboard:show_dashboard_home')

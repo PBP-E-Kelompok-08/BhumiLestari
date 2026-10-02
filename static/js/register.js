@@ -84,3 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSendOtp.innerText = 'Kirim OTP';
     }
 });
+// Toggle lihat/sembunyikan password (ikon mata) - dipakai login & register
+document.querySelectorAll('.toggle-pass').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var input = document.getElementById(btn.dataset.target);
+        input.type = input.type === 'password' ? 'text' : 'password';
+    });
+});

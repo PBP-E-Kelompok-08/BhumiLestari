@@ -44,13 +44,16 @@ body {
     font-size: 1.125rem;
 }
 
-.button-nav {
+.button-login,
+.button-register {
     display: inline-block;
+    padding: .6rem 1.8rem;
+    font-size: .9rem;
     height: 2rem;
     padding: 0 1rem;
     border: none;
     background: var(--ink);
-    color: white;
+    color: white !important;
     cursor: pointer;
     font-family: "Prompt", sans-serif;
 }

@@ -1,112 +1,94 @@
-/* Style bersama untuk halaman login & register BhumiLestari */
 :root {
-    --green: #8C9E6B;
-    --green-dark: #7a8b5c;
-    --green-text: #1F331A;
-    --green-sub: #2C4026;
-    --cream: #E8E4BF;
-    --cream-dark: #DDD8AC;
+    --green: #ADC178;        /* warna tombol Sign Up & toggle aktif (hasil sampling, cek lagi di Dev Mode) */
+    --green-dark: #98ad63;
+    --cream: #F0EAD2;        /* tombol Kirim OTP */
+    --cream-dark: #e4dcb8;
+    --text: #1b1b1b;
+    --muted: #4b4b4b;
+    --font-body: "Hanuman", Georgia, "Times New Roman", serif;
+    --shadow: 0 2px 4px rgba(0,0,0,.25);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: #f3f4f6;
+    font-family: var(--font-body);
+    color: var(--text);
+    background: #fff;
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+    padding: 1.5rem;
 }
+
 
 .auth-card {
-    background: #fff;
-    border-radius: 1.5rem;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
     display: flex;
-    max-width: 56rem;
-    width: 100%;
-    overflow: hidden;
+    gap: 2rem;
+    max-width: 90rem;
+    min-height: calc(100vh - 3rem);
+    margin: 0 auto;
 }
 
-/* Banner kiri */
+
 .auth-banner {
-    width: 50%;
-    background: var(--green);
-    padding: 2.5rem;
+    flex: 1;
+    min-width: 0;
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: #fff;
+    align-items: center;      
+    justify-content: center;   
 }
-.auth-logo {
-    width: 6rem;
-    height: 6rem;
-    background: rgba(255,255,255,.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.25rem;
-    margin-bottom: 1.5rem;
-}
-.auth-brand {
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 1.875rem;
-    font-weight: 700;
-    color: var(--green-text);
-    margin-bottom: 1rem;
-}
-.auth-tagline {
-    font-size: .875rem;
-    font-weight: 500;
-    color: var(--green-sub);
-    max-width: 20rem;
+.auth-banner img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: calc(100vh - 3rem);   
+    border-radius: 1.25rem;           
+    object-fit: contain;
 }
 
-/* Form kanan */
+
 .auth-form-wrap {
-    width: 50%;
-    padding: 2rem;
+    flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
 }
-.auth-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--green-text);
-    margin-bottom: 1.5rem;
-    text-align: center;
-}
+.auth-form-wrap > * { width: 100%; max-width: 24rem; }
 
-.field { margin-bottom: .75rem; position: relative; }
+.field { margin-bottom: .9rem; position: relative; }
 .field.with-btn { display: flex; align-items: center; }
-.field.last { margin-bottom: 1.5rem; }
+.field.last { margin-bottom: 1.75rem; }
 
 .input {
     width: 100%;
-    padding: .5rem 1rem;
-    font-size: .875rem;
-    border: 1px solid #d1d5db;
-    border-radius: 9999px;
-    outline: none;
+    height: 2.75rem;
+    padding: 0 1.1rem;
+    font-size: .8rem;
     font-family: inherit;
+    color: var(--text);
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-radius: 9999px;
+    box-shadow: var(--shadow);
+    outline: none;
 }
-.input:focus { box-shadow: 0 0 0 2px var(--green); border-color: transparent; }
-.input.has-btn { padding-right: 7rem; }
+.input::placeholder { color: var(--text); opacity: 1; }
+.input:focus { border-color: var(--green); box-shadow: var(--shadow), 0 0 0 2px var(--green); }
+.input.has-btn { padding-right: 9rem; }
+.input.has-icon { padding-right: 3rem; }
+
 
 .btn-otp {
     position: absolute;
-    right: .25rem;
-    padding: .375rem 1rem;
+    top: .2rem;
+    bottom: .2rem;
+    right: .2rem;
+    width: 8rem;
     background: var(--cream);
-    color: #1f2937;
+    color: var(--text);
+    font-family: inherit;
     font-size: .75rem;
-    font-weight: 500;
     border: none;
     border-radius: 9999px;
     cursor: pointer;
@@ -115,69 +97,117 @@ body {
 .btn-otp:hover { background: var(--cream-dark); }
 .btn-otp:disabled { opacity: .6; cursor: not-allowed; }
 
+
+.toggle-pass {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    display: flex;
+    padding: .25rem;
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+}
+.toggle-pass svg { width: 1.1rem; height: 1.1rem; fill: currentColor; }
+
 .btn-submit {
     width: 100%;
-    padding: .625rem;
+    height: 2.75rem;
     background: var(--green);
-    color: #fff;
-    font-weight: 600;
-    font-size: 1rem;
+    color: var(--text);
+    font-family: inherit;
+    font-size: .85rem;
     border: none;
     border-radius: 9999px;
+    box-shadow: var(--shadow);
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0,0,0,.2);
     transition: background .3s;
 }
 .btn-submit:hover { background: var(--green-dark); }
 
-/* Toggle role */
+
 .role-toggle {
-    background: #f3f4f6;
-    padding: .25rem;
-    border-radius: 9999px;
     display: flex;
-    margin-bottom: 1.5rem;
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-radius: 9999px;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.1rem;
 }
 .role-btn {
-    width: 50%;
-    padding: .5rem 0;
+    flex: 1;
+    height: 2.75rem;
+    margin: -1px;           
     border: none;
     background: transparent;
     border-radius: 9999px;
-    font-size: .875rem;
-    font-weight: 600;
-    color: #4b5563;
+    font-family: inherit;
+    font-size: .8rem;
+    color: var(--text);
     cursor: pointer;
-    transition: all .3s;
+    transition: background .3s;
 }
-.role-btn.active { background: var(--green); color: #fff; }
+.role-btn.active { background: var(--green); }
 
-/* Alert dari Django messages */
-.alert {
-    margin-bottom: 1rem;
-    padding: .75rem;
-    font-size: .875rem;
-    border-radius: .5rem;
-}
+
+.alert { margin-bottom: 1rem; padding: .75rem; font-size: .8rem; border-radius: .75rem; }
 .alert-error { background: #fee2e2; color: #b91c1c; }
 .alert-success { background: #dcfce7; color: #15803d; }
 .alert-info, .alert-warning { background: #fef9c3; color: #854d0e; }
 
-.auth-footer {
-    text-align: center;
-    font-size: .75rem;
-    color: #6b7280;
-    margin-top: 1rem;
-}
-.auth-footer a { color: var(--green); font-weight: 600; text-decoration: none; }
+.auth-footer { text-align: center; font-size: .75rem; color: var(--text); margin-top: 1rem; }
+.auth-footer a { color: var(--green); text-decoration: none; }
 .auth-footer a:hover { text-decoration: underline; }
 
 .hidden { display: none; }
+.sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+}
 
-/* Responsif: di layar kecil banner ditumpuk di atas */
+
 @media (max-width: 768px) {
-    .auth-card { flex-direction: column; }
-    .auth-banner, .auth-form-wrap { width: 100%; }
-    .auth-banner { padding: 1.5rem; }
-    .auth-logo { width: 4rem; height: 4rem; font-size: 1.5rem; margin-bottom: 1rem; }
+    body { padding: 1rem; }
+    .auth-card { flex-direction: column; gap: 1.5rem; min-height: 0; }
+    .auth-banner { flex: none; height: auto; }
+    .auth-banner img { max-height: 22rem; }
+}
+
+
+.auth-card.is-login { flex-direction: row-reverse; }
+
+.auth-heading {
+    font-size: 1.35rem;
+    font-weight: 700;
+    text-align: center;
+    color: #000;
+    margin-bottom: .5rem;
+    font-family: Hanuman;
+}
+.auth-heading .accent { color: var(--green); }
+.auth-sub { font-size: .75rem; text-align: center; margin-bottom: 1.5rem; }
+
+.remember {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .7rem;
+    margin: .25rem 0 1.25rem;
+    cursor: pointer;
+}
+.remember input { width: .8rem; height: .8rem; accent-color: var(--green); }
+
+
+@view-transition { navigation: auto; }
+.auth-banner img{ view-transition-name: auth-banner; }
+::view-transition-group(auth-banner) {
+    animation-duration: .7s;
+    animation-timing-function: cubic-bezier(.65, 0, .35, 1);
+}
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .4s; }
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

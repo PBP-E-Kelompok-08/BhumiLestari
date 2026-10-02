@@ -5,21 +5,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - BhumiLestari</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanuman:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+    <link rel="preload" as="image" href="{% static 'img/banner.png' %}">
+    <link rel="expect" href="#authCard" blocking="render">
 </head>
 <body>
-    <div class="auth-card">
+    <div class="auth-card is-login" id="authCard">
 
-        <!-- Sisi Kiri (Banner) -->
         <div class="auth-banner">
-            <div class="auth-logo">🌼</div>
-            <h1 class="auth-brand">BhumiLestari</h1>
-            <p class="auth-tagline">Produk ramah lingkungan, untuk masa depan yang lebih baik.</p>
+            <img src="{% static 'img/banner.png' %}"
+                 alt="BhumiLestari - Produk ramah lingkungan, untuk masa depan yang lebih baik.">
         </div>
 
-        <!-- Sisi Kanan (Formulir) -->
+        <!-- Formulir -->
         <div class="auth-form-wrap">
-            <h2 class="auth-title">Selamat Datang Kembali</h2>
+            <h1 class="auth-heading"><span class="accent">Welcome</span> Back</h1>
+            <p class="auth-sub">Please enter your details</p>
 
             {% if messages %}
                 {% for message in messages %}
@@ -33,17 +37,34 @@
                 <div class="field">
                     <input type="email" name="email" class="input" placeholder="Email" required autofocus>
                 </div>
-                <div class="field last">
-                    <input type="password" name="password" class="input" placeholder="Password" required>
+                <div class="field">
+                    <input type="password" name="password" id="loginPassInput" class="input has-icon" placeholder="Password" required>
+                    <button type="button" class="toggle-pass" data-target="loginPassInput" aria-label="Tampilkan password">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                    </button>
                 </div>
 
-                <button type="submit" class="btn-submit">Login</button>
+                <label class="remember">
+                    <input type="checkbox" name="remember_me"> Remember Me
+                </label>
+
+                <button type="submit" class="btn-submit">Log In</button>
 
                 <p class="auth-footer">
-                    Belum punya akun? <a href="{% url 'users:register' %}">Sign Up</a>
+                    Don’t have an account? <a href="{% url 'users:register' %}">Sign Up</a>
                 </p>
             </form>
         </div>
     </div>
+
+    <script>
+document.querySelectorAll('.toggle-pass').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        input.type = (input.type === 'password') ? 'text' : 'password';
+    });
+});
+</script>
 </body>
 </html>
