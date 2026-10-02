@@ -18,7 +18,7 @@
                 <img class="menu" src="{% static 'img/hamburger.png' %}" alt="Menu">
 
                 <a href="{% url 'dashboard:show_dashboard_home' %}">
-                    <img class="logo" src="{% static "img/logo.png" %}" alt="Logo">
+                    <img class="logo" src="{% static 'img/logo.png' %}" alt="Logo">
                     BhumiLestari
                 </a>
             </div> 
@@ -37,8 +37,29 @@
                 <img class="notif" src="{% static 'img/notif.png' %}" alt="Notification">
                 <img class="question" src="{% static 'img/question.png' %}" alt="Question">
 
-                <button class="button-nav" type="button">Login</button>
-                <button class="button-nav" type="button">Daftar</button>
+                {% if user.is_authenticated %}
+                <div class="nav-user-menu">
+                    <button type="button" class="nav-user" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">
+                        <span class="nav-avatar">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="9" r="4"/>
+                                <path d="M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
+                            </svg>
+                        </span>
+                        <span class="nav-username">{{ user.get_full_name|default:user.get_username }}</span>
+                    </button>
+
+                    <div class="nav-dropdown" id="userMenu" hidden>
+                        <form method="POST" action="{% url 'users:logout' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="nav-dropdown-item">Logout</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                    <a href="{% url 'users:login' %}" class="btn-login">Login</a>
+                    <a href="{% url 'users:register' %}" class="btn-register">Daftar</a>
+                {% endif %}  
             </div>
         </nav>
     </header>
@@ -50,5 +71,28 @@
             <p>Made with Love - PBP E Team 8</p>
         </div>
     </footer>
+    <script>
+    (function () {
+        var btn = document.getElementById('userMenuBtn');
+        var menu = document.getElementById('userMenu');
+        if (!btn || !menu) return;
+
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = menu.hidden;
+            menu.hidden = !open;
+            btn.setAttribute('aria-expanded', open);
+        });
+
+        document.addEventListener('click', function () {
+            menu.hidden = true;
+            btn.setAttribute('aria-expanded', 'false');
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') menu.hidden = true;
+        });
+    })();
+    </script>
 </body> 
 </html>

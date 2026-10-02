@@ -23,5 +23,5 @@ urlpatterns = [
     path("", include("apps.checkout.urls")),
     path("", include("apps.dashboard.urls")),
     path("", include("apps.products.urls")),
-    path("", include("apps.users.urls")),
+    path("users/", include("apps.users.urls")),
 ]

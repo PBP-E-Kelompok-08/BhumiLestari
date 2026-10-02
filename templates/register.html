@@ -1,0 +1,90 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - BhumiLestari</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanuman:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+    <link rel="preload" as="image" href="{% static 'img/banner.png' %}">
+    <link rel="expect" href="#authCard" blocking="render">
+</head>
+<body>
+    <div class="auth-card" id="authCard">
+
+        <div class="auth-banner">
+            <img src="{% static 'img/banner.png' %}"
+                 alt="BhumiLestari - Produk ramah lingkungan, untuk masa depan yang lebih baik.">
+        </div>
+
+        <div class="auth-form-wrap">
+            <h1 class="auth-heading"><span class="accent">Create</span> Account</h1>
+            <p class="auth-sub">Daftar dan mulai belanja produk ramah lingkungan</p>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" id="registerForm" data-otp-url="{% url 'users:send_otp_api' %}">
+                {% csrf_token %}
+                <input type="hidden" name="role" id="roleInput" value="seller">
+
+                <!-- Toggle Role -->
+                <div class="role-toggle">
+                    <button type="button" id="btnPenjual" class="role-btn active">Penjual</button>
+                    <button type="button" id="btnPembeli" class="role-btn">Pembeli</button>
+                </div>
+
+                <div class="field">
+                    <input type="text" name="full_name" class="input" placeholder="Nama" required>
+                </div>
+
+                <!-- Nama Toko (Penjual) / Username (Pembeli) -->
+                <div class="field" id="fieldNamaToko">
+                    <input type="text" name="store_name" id="inputStoreName" class="input" placeholder="Nama Toko" required>
+                </div>
+                <div class="field hidden" id="fieldUsername">
+                    <input type="text" name="username" id="inputUsername" class="input" placeholder="Username">
+                </div>
+
+                <div class="field">
+                    <input type="email" name="email" id="emailInput" class="input" placeholder="Email" required>
+                </div>
+
+                <!-- OTP + tombol kirim -->
+                <div class="field with-btn">
+                    <input type="text" name="otp_code" class="input has-btn" placeholder="OTP" required>
+                    <button type="button" id="btnSendOtp" class="btn-otp">Kirim OTP</button>
+                </div>
+
+                <div class="field">
+                    <input type="password" name="password" id="passInput" class="input has-icon" placeholder="Password" required>
+                    <button type="button" class="toggle-pass" data-target="passInput" aria-label="Tampilkan password">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                    </button>
+                </div>
+                <div class="field last">
+                    <input type="password" name="confirm_password" id="confirmPassInput" class="input has-icon" placeholder="Confirm Password" required>
+                    <button type="button" class="toggle-pass" data-target="confirmPassInput" aria-label="Tampilkan konfirmasi password">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                    </button>
+                </div>
+
+                <button type="submit" class="btn-submit">Sign Up</button>
+
+                <p class="auth-footer">
+                    Already have an account? <a href="{% url 'users:login' %}">Login</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <script src="{% static 'js/register.js' %}"></script>
+    <script src="{% static 'js/auth.js' %}"></script>
+</body>
+</html>
