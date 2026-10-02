@@ -1,33 +1,56 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block meta %}
+    <title>Dashboard - BhumiLestari</title>
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock meta %}
 
 {% block content %}
-<h1>Selamat datang, Toko Eco Friendly!</h1>
-<br>
-<h1>Test</h1>
+<main class="dash-page role-seller">
+    <h1 class="dash-title">Produk Toko Eco Friendly</h1>
 
-<p> Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien 
-    vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 
-    Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class 
-    aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
+    <div class="dash-toolbar">
+        <select class="dash-btn" aria-label="Urutkan produk">
+            <option>Sort by</option>
+            <option>Terlaris</option>
+            <option>Terbaru</option>
+        </select>
+        <a href="#" class="dash-btn-seller">+ Tambah Produk</a>
+    </div>
 
-<p> Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien 
-    vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 
-    Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class 
-    aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
+    <div class="dash-grid">
+        <article class="dash-card">
+            <div class="dash-card-img">
+                <img src="{% static 'img/toples.png' %}" alt="Toples Kaca Bamboo Series">
+            </div>
+            <h2 class="dash-card-name">Toples Kaca Bamboo Series</h2>
+            <div class="dash-card-price">
+                <span>Rp. 18.000</span>
+                <span class="dash-badge">Diskon: 20%</span>
+            </div>
+            <div class="dash-card-actions">
+                <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
+                <a href="#" class="dash-btn-seller">Edit Item</a>
+                <button type="button" class="dash-btn-danger-seller">Delete Item</button>
+            </div>
+        </article>
 
-<p> Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien 
-    vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 
-    Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class 
-    aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
-
-<p> Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien 
-    vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 
-    Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class 
-    aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
-
-<p> Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien 
-    vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 
-    Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class 
-    aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himeanaeos.</p>
-
+        <article class="dash-card">
+            <div class="dash-card-img">
+                <img src="{% static 'img/totebag.png' %}" alt="Totebag Plain Series">
+            </div>
+            <h2 class="dash-card-name">Totebag Plain Series</h2>
+            <div class="dash-card-price">
+                <span>Rp. 16.000</span>
+            </div>
+            <div class="dash-card-actions">
+                <a href="#" class="dash-btn-guest">Tambah ke Keranjang</a>
+                <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
+                <a href="#" class="dash-btn-seller">Edit Item</a>
+                <button type="button" class="dash-btn-danger-seller">Delete Item</button>
+            </div>
+        </article>
+    </div>
+</main>
 {% endblock content %}
