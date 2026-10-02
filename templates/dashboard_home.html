@@ -28,12 +28,7 @@
         </button>
         <ul class="dash-user-menu" hidden>
             <li><a href="#">Pengaturan Akun</a></li>
-            <li>
-                <form method="POST" action="{% url 'users:logout' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="dash-logout-btn">Log Out</button>
-                </form>
-            </li>
+            <li><a href="#">Keluar</a></li>
         </ul>
     </div>
 </aside>
@@ -55,12 +50,7 @@
         </button>
         <ul class="dash-user-menu" hidden>
             <li><a href="#">Pengaturan Akun</a></li>
-            <li>
-                <form method="POST" action="{% url 'users:logout' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="dash-logout-btn">Log Out</button>
-                </form>
-            </li>
+            <li><a href="#">Keluar</a></li>
         </ul>
     </div>
 </aside>
