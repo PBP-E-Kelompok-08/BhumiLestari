@@ -131,18 +131,11 @@
     list-style: none;
 }
 
-.dash-sidebar a,
-.dash-user-menu button {
+.dash-sidebar a {
     display: block;
-    width: 100%;
     padding: 1rem 1.5rem;
     color: inherit;
     text-decoration: none;
-    font: inherit;
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: inherit;
 }
 
 .dash-sidebar a:hover,
@@ -191,11 +184,6 @@
     color: var(--ink);
 }
 
-.dash-user-menu a:hover,
-.dash-user-menu button:hover {
+.dash-user-menu a:hover {
     background: #e1dfdf;
-}
-
-.dash-user-menu form {
-    margin: 0;
 }
