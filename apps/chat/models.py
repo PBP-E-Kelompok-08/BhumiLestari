@@ -23,8 +23,6 @@ class ProductKnowledge(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = "Product Knowledge"
-        verbose_name_plural = "Product Knowledges"
 
     def __str__(self):
         return f"[{self.product_name or self.product_id}] {self.question}"
@@ -32,7 +30,8 @@ class ProductKnowledge(models.Model):
 
 class ChatSession(models.Model):
     """
-    Sesi percakapan dasar.
+    Sesi percakapan. Dapat bertipe 'ai' (Asisten Bot) atau 'direct' (Obrolan Langsung Penjual).
+    Memiliki multi-product context via SessionProductContext.
     """
     TYPE_AI = 'ai'
     TYPE_DIRECT = 'direct'
@@ -50,6 +49,16 @@ class ChatSession(models.Model):
         (STATUS_RESOLVED, 'Resolved'),
     ]
 
+    HANDOVER_NONE = 'none'
+    HANDOVER_MANUAL = 'manual_user'
+    HANDOVER_UNANSWERED = 'unanswered_by_ai'
+
+    HANDOVER_REASONS = [
+        (HANDOVER_NONE, 'None'),
+        (HANDOVER_MANUAL, 'Diminta Pembeli'),
+        (HANDOVER_UNANSWERED, 'Jawaban Tidak Ada di Daftar Penjual'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     buyer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -63,6 +72,17 @@ class ChatSession(models.Model):
     )
     session_type = models.CharField(max_length=15, choices=SESSION_TYPE_CHOICES, default=TYPE_AI)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    # Referensi ke sesi AI awal bila sesi ini merupakan hasil eskalasi/pengalihan
+    origin_session = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="escalated_sessions"
+    )
+    handover_reason = models.CharField(max_length=30, choices=HANDOVER_REASONS, default=HANDOVER_NONE)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -71,3 +91,70 @@ class ChatSession(models.Model):
 
     def __str__(self):
         return f"[{self.session_type.upper()}] {self.buyer.email} -> {self.seller.email} ({self.status})"
+
+
+class SessionProductContext(models.Model):
+    """
+    Konteks produk yang dibahas dalam suatu ChatSession.
+    Satu sesi bisa memiliki satu atau lebih konteks produk.
+    """
+    session = models.ForeignKey(
+        ChatSession,
+        on_delete=models.CASCADE,
+        related_name="product_contexts"
+    )
+    product_id = models.CharField(max_length=100, db_index=True)
+    product_name = models.CharField(max_length=255, blank=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('session', 'product_id')
+        ordering = ['added_at']
+
+    def __str__(self):
+        return f"Sesi {self.session_id} - Produk: {self.product_name or self.product_id}"
+
+
+class ChatMessage(models.Model):
+    """
+    Riwayat pesan individu dalam sesi percakapan.
+    Pesan dari sesi AI yang diwariskan ke sesi direct ditandai dengan is_inherited_from_ai=True.
+    """
+    SENDER_BUYER = 'buyer'
+    SENDER_SELLER = 'seller'
+    SENDER_AI = 'ai'
+    SENDER_SYSTEM = 'system'
+
+    SENDER_CHOICES = [
+        (SENDER_BUYER, 'Buyer'),
+        (SENDER_SELLER, 'Seller'),
+        (SENDER_AI, 'AI Assistant'),
+        (SENDER_SYSTEM, 'System Notification'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(
+        ChatSession,
+        on_delete=models.CASCADE,
+        related_name="messages"
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    sender_type = models.CharField(max_length=15, choices=SENDER_CHOICES)
+    content = models.TextField()
+    is_inherited_from_ai = models.BooleanField(
+        default=False,
+        help_text="True jika pesan ini merupakan riwayat AI dari sesi sebelumnya yang diteruskan ke sesi direct."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        prefix = "[AI Hist]" if self.is_inherited_from_ai else f"[{self.sender_type}]"
+        return f"{prefix} {self.content[:35]}..."
