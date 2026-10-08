@@ -85,3 +85,27 @@ class AIServiceTest(TestCase):
         self.assertIn("Kayu jati.", prompt)
         self.assertIn("Bisa.", prompt)
         self.assertIn(HANDOVER_TOKEN, prompt)
+
+    def test_parse_handover_signal(self):
+        text_normal = "Produk ini terbuat dari serat kelapa alami."
+        is_handover, clean_text = parse_handover_signal(text_normal)
+        self.assertFalse(is_handover)
+        self.assertEqual(clean_text, text_normal)
+
+        text_handover = f"{HANDOVER_TOKEN}: Maaf informasi belum ada, dialihkan ke penjual."
+        is_handover, clean_text = parse_handover_signal(text_handover)
+        self.assertTrue(is_handover)
+        self.assertEqual(clean_text, "Maaf informasi belum ada, dialihkan ke penjual.")
+
+    @patch("requests.post")
+    def test_query_openrouter_success(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "Jawaban dari AI"}}]
+        }
+        mock_post.return_value = mock_resp
+
+        with patch.dict("os.environ", {"API_KEY": "test-key"}):
+            reply = query_openrouter([{"role": "user", "content": "Halo"}])
+            self.assertEqual(reply, "Jawaban dari AI")
