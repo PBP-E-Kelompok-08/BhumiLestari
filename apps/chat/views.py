@@ -134,3 +134,88 @@ def add_product_context_api(request, session_id):
         "added": added,
         "all_product_contexts": all_contexts,
     })
+
+
+@login_required
+def send_ai_message_api(request, session_id):
+    """
+    POST: Pembeli mengirim pertanyaan ke AI.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user != session.buyer:
+        return _json_error("Hanya pembeli di sesi ini yang dapat mengirim pesan ke AI.", status=403)
+
+    if session.session_type != ChatSession.TYPE_AI:
+        return _json_error("Sesi ini bukan sesi AI.", status=400)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    content = str(data.get("content", "")).strip()
+    if not content:
+        return _json_error("Pesan content tidak boleh kosong.")
+
+    user_msg = ChatMessage.objects.create(
+        session=session,
+        sender=request.user,
+        sender_type=ChatMessage.SENDER_BUYER,
+        content=content,
+    )
+
+    product_contexts = list(session.product_contexts.all())
+    product_ids = [c.product_id for c in product_contexts]
+
+    knowledges = ProductKnowledge.objects.filter(
+        seller=session.seller,
+        product_id__in=product_ids,
+        is_active=True
+    )
+    knowledges_by_product = {}
+    for k in knowledges:
+        knowledges_by_product.setdefault(k.product_id, []).append(k)
+
+    store_name = _get_seller_store_name(session.seller)
+    system_prompt = build_system_prompt(store_name, product_contexts, knowledges_by_product)
+
+    recent_msgs = session.messages.exclude(id=user_msg.id).order_by("-created_at")[:8]
+    recent_msgs = reversed(recent_msgs)
+
+    messages_payload = [{"role": "system", "content": system_prompt}]
+    for m in recent_msgs:
+        role = "user" if m.sender_type == ChatMessage.SENDER_BUYER else "assistant"
+        messages_payload.append({"role": role, "content": m.content})
+    messages_payload.append({"role": "user", "content": content})
+
+    try:
+        raw_ai_reply = query_openrouter(messages_payload)
+    except Exception as e:
+        logger.error(f"Gagal memanggil AI service: {e}")
+        return _json_error("Layanan AI asisten sedang sibuk.", status=503)
+
+    is_handover, cleaned_reply = parse_handover_signal(raw_ai_reply)
+
+    if not is_handover:
+        ai_msg = ChatMessage.objects.create(
+            session=session,
+            sender=None,
+            sender_type=ChatMessage.SENDER_AI,
+            content=cleaned_reply,
+        )
+        return JsonResponse({
+            "status": "success",
+            "handover": False,
+            "reply": cleaned_reply,
+            "message_id": str(ai_msg.id),
+            "session_id": str(session.id),
+        })
+
+    return JsonResponse({
+        "status": "success",
+        "handover": True,
+        "reply": cleaned_reply,
+    })
