@@ -10,6 +10,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Model gratis dibanyakin biar ga gampang limit
 DEFAULT_AI_MODELS = [
     "google/gemini-2.0-flash-exp:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
 ]
 
 HANDOVER_TOKEN = "[HANDOVER_TO_SELLER]"
