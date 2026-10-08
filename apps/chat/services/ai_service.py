@@ -115,6 +115,7 @@ def parse_handover_signal(ai_reply_text):
 
     if HANDOVER_TOKEN in ai_reply_text:
         cleaned = ai_reply_text.replace(HANDOVER_TOKEN, "").strip()
+        cleaned = re.sub(r"^:\s*", "", cleaned)  # Hapus titik dua kalo ada
         if not cleaned:
             cleaned = "Pertanyaan Anda telah kami teruskan ke ruang obrolan langsung dengan penjual."
         return True, cleaned
