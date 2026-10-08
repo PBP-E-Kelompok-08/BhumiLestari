@@ -1,3 +1,136 @@
-from django.shortcuts import render
+import json
+import logging
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 
-# Create your views here.
+from apps.chat.models import ProductKnowledge, ChatSession, SessionProductContext, ChatMessage
+from apps.chat.services.ai_service import (
+    build_system_prompt,
+    query_openrouter,
+    parse_handover_signal,
+)
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
+
+
+def _json_error(message, status=400):
+    return JsonResponse({"status": "error", "message": message}, status=status)
+
+
+def _get_seller_store_name(seller):
+    if hasattr(seller, 'seller_profile') and seller.seller_profile:
+        return seller.seller_profile.store_name
+    return seller.full_name or seller.email.split('@')[0]
+
+
+@login_required
+def get_or_create_ai_session_api(request):
+    """
+    POST: Inisiasi sesi chat AI untuk satu atau lebih produk.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    seller_id = data.get("seller_id")
+    if not seller_id:
+        return _json_error("Parameter seller_id wajib disertakan.")
+
+    seller = get_object_or_404(User, id=seller_id)
+    buyer = request.user
+
+    if buyer == seller:
+        return _json_error("Penjual tidak dapat membuka sesi tanya produk ke diri sendiri.")
+
+    ai_session = ChatSession.objects.filter(
+        buyer=buyer,
+        seller=seller,
+        session_type=ChatSession.TYPE_AI,
+        status=ChatSession.STATUS_ACTIVE,
+    ).first()
+
+    if not ai_session:
+        ai_session = ChatSession.objects.create(
+            buyer=buyer,
+            seller=seller,
+            session_type=ChatSession.TYPE_AI,
+            status=ChatSession.STATUS_ACTIVE,
+        )
+
+    products = data.get("products", [])
+    for p in products:
+        p_id = str(p.get("product_id", "")).strip()
+        p_name = str(p.get("product_name", "")).strip()
+        if p_id:
+            SessionProductContext.objects.get_or_create(
+                session=ai_session,
+                product_id=p_id,
+                defaults={"product_name": p_name}
+            )
+
+    contexts = [
+        {"product_id": c.product_id, "product_name": c.product_name}
+        for c in ai_session.product_contexts.all()
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "session_id": str(ai_session.id),
+        "session_type": ai_session.session_type,
+        "seller": {
+            "id": seller.id,
+            "email": seller.email,
+            "store_name": _get_seller_store_name(seller),
+        },
+        "product_contexts": contexts,
+    })
+
+
+@login_required
+def add_product_context_api(request, session_id):
+    """
+    POST: Menambahkan konteks produk ke sesi yang sedang berjalan.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user not in (session.buyer, session.seller):
+        return _json_error("Akses ditolak.", status=403)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    products = data.get("products", [])
+    added = []
+    for p in products:
+        p_id = str(p.get("product_id", "")).strip()
+        p_name = str(p.get("product_name", "")).strip()
+        if p_id:
+            ctx, created = SessionProductContext.objects.get_or_create(
+                session=session,
+                product_id=p_id,
+                defaults={"product_name": p_name}
+            )
+            if created:
+                added.append({"product_id": ctx.product_id, "product_name": ctx.product_name})
+
+    all_contexts = [
+        {"product_id": c.product_id, "product_name": c.product_name}
+        for c in session.product_contexts.all()
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "added": added,
+        "all_product_contexts": all_contexts,
+    })
