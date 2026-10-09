@@ -1,8 +1,9 @@
 import json
 import logging
 from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt 
 from django.contrib.auth import get_user_model
 
 from apps.chat.models import ProductKnowledge, ChatSession, SessionProductContext, ChatMessage
@@ -26,18 +27,8 @@ def _get_seller_store_name(seller):
     return seller.full_name or seller.email.split('@')[0]
 
 
-
-
 def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, forward_question=None):
-    """
-    Fungsi utilitas untuk membuat sesi baru bertipe 'direct' dengan penjual:
-    1. Membuat ChatSession baru bertipe 'direct' dengan origin_session=ai_session.
-    2. Menyalin semua SessionProductContext dari ai_session ke sesi baru.
-    3. Menyalin seluruh pesan riwayat AI ke sesi baru (ditandai is_inherited_from_ai=True).
-    4. Menyisipkan pesan sistem pembatas.
-    5. Menambahkan pertanyaan pembeli ke sesi baru jika handover otomatis (forward_question).
-    6. Mengubah status ai_session menjadi resolved/handover.
-    """
+
     direct_session = ChatSession.objects.create(
         buyer=ai_session.buyer,
         seller=ai_session.seller,
@@ -97,10 +88,23 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
 
     return direct_session
 
+
+# ==============================================================================
+# BUYER & AI CHAT API
+# ==============================================================================
+
 @login_required
 def get_or_create_ai_session_api(request):
     """
     POST: Inisiasi sesi chat AI untuk satu atau lebih produk.
+    Payload:
+    {
+        "seller_id": 1,
+        "products": [
+            {"product_id": "PRD-01", "product_name": "Sabun Bambu"},
+            {"product_id": "PRD-02", "product_name": "Sikat Gigi"}
+        ]
+    }
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -120,6 +124,7 @@ def get_or_create_ai_session_api(request):
     if buyer == seller:
         return _json_error("Penjual tidak dapat membuka sesi tanya produk ke diri sendiri.")
 
+    # Cari sesi AI aktif yang sudah ada dengan penjual tersebut
     ai_session = ChatSession.objects.filter(
         buyer=buyer,
         seller=seller,
@@ -135,6 +140,7 @@ def get_or_create_ai_session_api(request):
             status=ChatSession.STATUS_ACTIVE,
         )
 
+    # Daftarkan konteks produk
     products = data.get("products", [])
     for p in products:
         p_id = str(p.get("product_id", "")).strip()
@@ -167,7 +173,10 @@ def get_or_create_ai_session_api(request):
 @login_required
 def add_product_context_api(request, session_id):
     """
-    POST: Menambahkan konteks produk ke sesi yang sedang berjalan.
+    Payload:
+    {
+        "products": [{"product_id": "PRD-03", "product_name": "stuff or product or whatever"}]
+    }
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -209,9 +218,7 @@ def add_product_context_api(request, session_id):
 
 @login_required
 def send_ai_message_api(request, session_id):
-    """
-    POST: Pembeli mengirim pertanyaan ke AI.
-    """
+
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -220,7 +227,7 @@ def send_ai_message_api(request, session_id):
         return _json_error("Hanya pembeli di sesi ini yang dapat mengirim pesan ke AI.", status=403)
 
     if session.session_type != ChatSession.TYPE_AI:
-        return _json_error("Sesi ini bukan sesi AI.", status=400)
+        return _json_error("Sesi ini bukan sesi AI. Gunakan endpoint direct-send.", status=400)
 
     try:
         data = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -266,26 +273,22 @@ def send_ai_message_api(request, session_id):
         raw_ai_reply = query_openrouter(messages_payload)
     except Exception as e:
         logger.error(f"Gagal memanggil AI service: {e}")
-        return _json_error("Layanan AI asisten sedang sibuk.", status=503)
-
-    is_handover, cleaned_reply = parse_handover_signal(raw_ai_reply)
-
-    if not is_handover:
-        ai_msg = ChatMessage.objects.create(
-            session=session,
-            sender=None,
-            sender_type=ChatMessage.SENDER_AI,
-            content=cleaned_reply,
+        # Fallback kalo API error/offline: chat langsung ke penjual
+        direct_session = _transfer_to_direct_session(
+            session,
+            reason=ChatSession.HANDOVER_UNANSWERED,
+            forward_question=content
         )
         return JsonResponse({
             "status": "success",
-            "handover": False,
-            "reply": cleaned_reply,
-            "message_id": str(ai_msg.id),
-            "session_id": str(session.id),
+            "handover": True,
+            "direct_session_id": str(direct_session.id),
+            "reply": "Layanan AI asisten sedang sibuk. Pertanyaan Anda telah otomatis kami teruskan ke ruang obrolan langsung dengan penjual.",
         })
 
-        if is_handover:
+    is_handover, cleaned_reply = parse_handover_signal(raw_ai_reply)
+
+    if is_handover:
         direct_session = _transfer_to_direct_session(
             session,
             reason=ChatSession.HANDOVER_UNANSWERED,
@@ -299,12 +302,25 @@ def send_ai_message_api(request, session_id):
             "message": "Jawaban tidak ada di daftar penjual. Sesi dialihkan ke chat langsung dengan penjual.",
         })
 
+    ai_msg = ChatMessage.objects.create(
+        session=session,
+        sender=None,
+        sender_type=ChatMessage.SENDER_AI,
+        content=cleaned_reply,
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "handover": False,
+        "reply": cleaned_reply,
+        "message_id": str(ai_msg.id),
+        "session_id": str(session.id),
+    })
+
 
 @login_required
 def escalate_to_seller_api(request, session_id):
-    """
-    POST: Pembeli secara manual mengklik tombol 'Chat dengan Penjual' di dalam chat AI.
-    """
+
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -328,11 +344,13 @@ def escalate_to_seller_api(request, session_id):
     })
 
 
+# ==============================================================================
+# GENERAL & DIRECT CHAT API
+# ==============================================================================
+
 @login_required
 def get_session_messages_api(request, session_id):
-    """
-    GET: Mengambil seluruh riwayat pesan suatu sesi.
-    """
+
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
 
@@ -554,7 +572,7 @@ def seller_knowledge_detail_api(request, pk):
     """
     GET, PUT/PATCH, DELETE: Mengelola entri Q&A individual milik penjual.
     """
-    item = get_object_or_404(ProductKnowledge, id=pk)
+    item = get_object_or_404(ProductKnowledge, id=pk, seller=request.user)
 
     if request.method == "GET":
         return JsonResponse({
