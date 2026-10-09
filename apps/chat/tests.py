@@ -1,7 +1,10 @@
+# AI DISCLOSURE: Test ini dibuat oleh AI untuk mempermudah memastikan apakah backendnya berjalan dgn baik atau tidak
+
 import json
 from unittest.mock import patch, MagicMock
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from apps.chat.models import ProductKnowledge, ChatSession, SessionProductContext, ChatMessage
 from apps.chat.services.ai_service import (
@@ -30,6 +33,7 @@ class ChatModelTest(TestCase):
         )
 
     def test_create_models(self):
+        # 1. Product Knowledge
         pk = ProductKnowledge.objects.create(
             seller=self.seller,
             product_id="PRD-01",
@@ -39,6 +43,7 @@ class ChatModelTest(TestCase):
         )
         self.assertIn("Sabun Batang Bambu", str(pk))
 
+        # 2. Chat Session
         session = ChatSession.objects.create(
             buyer=self.buyer,
             seller=self.seller,
@@ -47,6 +52,7 @@ class ChatModelTest(TestCase):
         self.assertEqual(session.status, ChatSession.STATUS_ACTIVE)
         self.assertIn("AI", str(session))
 
+        # 3. Product Context
         ctx = SessionProductContext.objects.create(
             session=session,
             product_id="PRD-01",
@@ -55,6 +61,7 @@ class ChatModelTest(TestCase):
         self.assertEqual(session.product_contexts.count(), 1)
         self.assertIn("Sabun Batang Bambu", str(ctx))
 
+        # 4. Chat Message
         msg = ChatMessage.objects.create(
             session=session,
             sender=self.buyer,
@@ -110,8 +117,6 @@ class AIServiceTest(TestCase):
             reply = query_openrouter([{"role": "user", "content": "Halo"}])
             self.assertEqual(reply, "Jawaban dari AI")
 
-from django.test import Client
-from django.urls import reverse
 
 class ChatAPITest(TestCase):
     def setUp(self):
@@ -137,6 +142,7 @@ class ChatAPITest(TestCase):
             role=User.ROLE_BUYER,
         )
 
+        # Knowledge base
         ProductKnowledge.objects.create(
             seller=self.seller,
             product_id="P1",
@@ -166,6 +172,7 @@ class ChatAPITest(TestCase):
 
         session_id = data["session_id"]
 
+        # Tambahkan konteks produk ketiga
         add_product_url = reverse("chat:add_product_context", args=[session_id])
         add_payload = {"products": [{"product_id": "P3", "product_name": "Kotak Makan Jerami"}]}
         add_resp = self.client.post(add_product_url, data=json.dumps(add_payload), content_type="application/json")
@@ -193,10 +200,11 @@ class ChatAPITest(TestCase):
         data = response.json()
         self.assertFalse(data["handover"])
         self.assertEqual(data["reply"], "Ya, bisa dicuci dan dipakai berulang kali.")
-        self.assertEqual(session.messages.count(), 2)
+        self.assertEqual(session.messages.count(), 2)  # 1 buyer + 1 ai
 
     @patch("apps.chat.views.query_openrouter")
     def test_send_ai_message_triggers_handover(self, mock_ai):
+        # AI mendeteksi jawaban tidak ada dan mengeluarkan tag handover
         mock_ai.return_value = f"{HANDOVER_TOKEN}: Maaf info garansi belum tersedia, saya alihkan ke penjual."
 
         self.client.login(username="buyer@test.com", password="password123")
@@ -206,6 +214,7 @@ class ChatAPITest(TestCase):
             session_type=ChatSession.TYPE_AI,
         )
         SessionProductContext.objects.create(session=session, product_id="P1", product_name="Sedotan Bambu")
+        # Pesan awal
         ChatMessage.objects.create(session=session, sender=self.buyer, sender_type=ChatMessage.SENDER_BUYER, content="Halo")
         ChatMessage.objects.create(session=session, sender=None, sender_type=ChatMessage.SENDER_AI, content="Halo ada yang bisa dibantu?")
 
@@ -218,18 +227,23 @@ class ChatAPITest(TestCase):
         self.assertTrue(data["handover"])
         self.assertIn("direct_session_id", data)
 
+        # Verifikasi Sesi Direct Baru yang Terbentuk
         direct_session_id = data["direct_session_id"]
         direct_session = ChatSession.objects.get(id=direct_session_id)
         self.assertEqual(direct_session.session_type, ChatSession.TYPE_DIRECT)
         self.assertEqual(direct_session.origin_session, session)
         self.assertEqual(direct_session.handover_reason, ChatSession.HANDOVER_UNANSWERED)
+
+        # Verifikasi produk context diwariskan
         self.assertEqual(direct_session.product_contexts.count(), 1)
         self.assertEqual(direct_session.product_contexts.first().product_id, "P1")
 
+        # Verifikasi riwayat chat AI tersalin di bagian atas sesi direct
         direct_messages = list(direct_session.messages.order_by("created_at"))
         inherited_msgs = [m for m in direct_messages if m.is_inherited_from_ai]
-        self.assertGreaterEqual(len(inherited_msgs), 2)
+        self.assertGreaterEqual(len(inherited_msgs), 2)  # Halo & Halo ada yang bisa dibantu
 
+        # Verifikasi pertanyaan pembeli diteruskan ke penjual
         last_buyer_msg = direct_messages[-1]
         self.assertEqual(last_buyer_msg.sender_type, ChatMessage.SENDER_BUYER)
         self.assertEqual(last_buyer_msg.content, "Apakah ada garansi 1 tahun?")
@@ -254,3 +268,67 @@ class ChatAPITest(TestCase):
         self.assertEqual(direct_session.session_type, ChatSession.TYPE_DIRECT)
         self.assertEqual(direct_session.handover_reason, ChatSession.HANDOVER_MANUAL)
         self.assertTrue(direct_session.messages.filter(is_inherited_from_ai=True).exists())
+
+    def test_direct_chat_messaging_and_seller_inbox(self):
+        direct_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        SessionProductContext.objects.create(session=direct_session, product_id="P1", product_name="Sedotan Bambu")
+
+        # 1. Pembeli kirim pesan langsung
+        self.client.login(username="buyer@test.com", password="password123")
+        send_url = reverse("chat:send_direct_message", args=[direct_session.id])
+        resp_b = self.client.post(send_url, data=json.dumps({"content": "Halo penjual, bisa kirim hari ini?"}), content_type="application/json")
+        self.assertEqual(resp_b.status_code, 200)
+
+        # 2. Penjual balas pesan
+        self.client.login(username="seller@test.com", password="password123")
+        resp_s = self.client.post(send_url, data=json.dumps({"content": "Bisa kak, siap kirim."}), content_type="application/json")
+        self.assertEqual(resp_s.status_code, 200)
+
+        # 3. Penjual lihat inbox
+        inbox_url = reverse("chat:seller_inbox_sessions")
+        resp_inbox = self.client.get(inbox_url)
+        self.assertEqual(resp_inbox.status_code, 200)
+        inbox_data = resp_inbox.json()
+        self.assertEqual(inbox_data["total_sessions"], 1)
+        self.assertEqual(inbox_data["sessions"][0]["last_message"]["content"], "Bisa kak, siap kirim.")
+
+        # 4. Ambil seluruh riwayat pesan (scroll ke atas)
+        msg_url = reverse("chat:get_session_messages", args=[direct_session.id])
+        resp_msgs = self.client.get(msg_url)
+        self.assertEqual(resp_msgs.status_code, 200)
+        self.assertEqual(len(resp_msgs.json()["messages"]), 2)
+
+    def test_seller_knowledge_base_crud(self):
+        self.client.login(username="seller@test.com", password="password123")
+        list_url = reverse("chat:seller_knowledge_list_create")
+
+        # Create
+        create_resp = self.client.post(list_url, data=json.dumps({
+            "product_id": "P9",
+            "product_name": "Tumbler Kaca",
+            "question": "Apakah tahan panas?",
+            "answer": "Tahan hingga 120 derajat Celsius.",
+        }), content_type="application/json")
+        self.assertEqual(create_resp.status_code, 201)
+        item_id = create_resp.json()["knowledge"]["id"]
+
+        # Read
+        get_resp = self.client.get(list_url)
+        self.assertEqual(get_resp.status_code, 200)
+
+        # Update
+        detail_url = reverse("chat:seller_knowledge_detail", args=[item_id])
+        patch_resp = self.client.patch(detail_url, data=json.dumps({
+            "answer": "Tahan hingga 150 derajat Celsius."
+        }), content_type="application/json")
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertEqual(ProductKnowledge.objects.get(id=item_id).answer, "Tahan hingga 150 derajat Celsius.")
+
+        # Delete
+        del_resp = self.client.delete(detail_url)
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertFalse(ProductKnowledge.objects.filter(id=item_id).exists())
