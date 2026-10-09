@@ -471,3 +471,138 @@ def seller_inbox_sessions_api(request):
         "total_sessions": len(results),
         "sessions": results,
     })
+
+
+@login_required
+def seller_knowledge_list_create_api(request):
+    """
+    GET: Melihat daftar Q&A yang dimiliki penjual. Opsional filter `?product_id=...`
+    
+    POST: Menambahkan Q&A baru per produk.
+    Payload:
+    {
+        "product_id": "PRD-01",
+        "product_name": "Sabun Bambu",
+        "question": "Apakah aman untuk anak-anak?",
+        "answer": "Ya, aman karena formula alami 100%."
+    }
+    """
+    seller = request.user
+
+    if request.method == "GET":
+        qs = ProductKnowledge.objects.filter(seller=seller)
+        product_id = request.GET.get("product_id")
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+
+        items = [
+            {
+                "id": k.id,
+                "product_id": k.product_id,
+                "product_name": k.product_name,
+                "question": k.question,
+                "answer": k.answer,
+                "is_active": k.is_active,
+                "created_at": k.created_at.isoformat(),
+                "updated_at": k.updated_at.isoformat(),
+            }
+            for k in qs
+        ]
+        return JsonResponse({"status": "success", "total": len(items), "knowledges": items})
+
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except json.JSONDecodeError:
+            return _json_error("Format JSON tidak valid.")
+
+        product_id = str(data.get("product_id", "")).strip()
+        product_name = str(data.get("product_name", "")).strip()
+        question = str(data.get("question", "")).strip()
+        answer = str(data.get("answer", "")).strip()
+
+        if not product_id or not question or not answer:
+            return _json_error("product_id, question, dan answer wajib diisi.")
+
+        item = ProductKnowledge.objects.create(
+            seller=seller,
+            product_id=product_id,
+            product_name=product_name,
+            question=question,
+            answer=answer,
+            is_active=bool(data.get("is_active", True)),
+        )
+
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil ditambahkan.",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        }, status=201)
+
+    return _json_error("Metode tidak didukung.", status=405)
+
+
+@login_required
+def seller_knowledge_detail_api(request, pk):
+    """
+    GET, PUT/PATCH, DELETE: Mengelola entri Q&A individual milik penjual.
+    """
+    item = get_object_or_404(ProductKnowledge, id=pk)
+
+    if request.method == "GET":
+        return JsonResponse({
+            "status": "success",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        })
+
+    elif request.method in ("PUT", "PATCH"):
+        try:
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except json.JSONDecodeError:
+            return _json_error("Format JSON tidak valid.")
+
+        if "question" in data:
+            item.question = str(data["question"]).strip()
+        if "answer" in data:
+            item.answer = str(data["answer"]).strip()
+        if "product_name" in data:
+            item.product_name = str(data["product_name"]).strip()
+        if "is_active" in data:
+            item.is_active = bool(data["is_active"])
+
+        item.save()
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil diperbarui.",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        })
+
+    elif request.method == "DELETE":
+        item.delete()
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil dihapus.",
+        })
+
+    return _json_error("Metode tidak didukung.", status=405)
