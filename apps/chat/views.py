@@ -340,7 +340,7 @@ def get_session_messages_api(request, session_id):
     if request.user not in (session.buyer, session.seller) and not request.user.is_staff:
         return _json_error("Anda tidak memiliki akses ke sesi ini.", status=403)
 
-    messages_qs = session.messages.all()
+    messages_qs = session.messages.order_by("created_at")
     messages_data = [
         {
             "id": str(m.id),
