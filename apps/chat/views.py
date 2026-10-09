@@ -33,6 +33,10 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
     Fungsi utilitas untuk membuat sesi baru bertipe 'direct' dengan penjual:
     1. Membuat ChatSession baru bertipe 'direct' dengan origin_session=ai_session.
     2. Menyalin semua SessionProductContext dari ai_session ke sesi baru.
+    3. Menyalin seluruh pesan riwayat AI ke sesi baru (ditandai is_inherited_from_ai=True).
+    4. Menyisipkan pesan sistem pembatas.
+    5. Menambahkan pertanyaan pembeli ke sesi baru jika handover otomatis (forward_question).
+    6. Mengubah status ai_session menjadi resolved/handover.
     """
     direct_session = ChatSession.objects.create(
         buyer=ai_session.buyer,
@@ -49,6 +53,48 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
             product_id=p_ctx.product_id,
             defaults={"product_name": p_ctx.product_name}
         )
+
+    ai_messages = ai_session.messages.order_by("created_at")
+    for msg in ai_messages:
+        ChatMessage.objects.create(
+            session=direct_session,
+            sender=msg.sender,
+            sender_type=msg.sender_type,
+            content=msg.content,
+            is_inherited_from_ai=True,
+            created_at=msg.created_at,
+        )
+
+    store_name = _get_seller_store_name(ai_session.seller)
+    ChatMessage.objects.create(
+        session=direct_session,
+        sender=None,
+        sender_type=ChatMessage.SENDER_SYSTEM,
+        content=f"--- Anda kini terhubung langsung dengan penjual ({store_name}). Riwayat obrolan dengan AI tersimpan di atas. ---",
+        is_inherited_from_ai=False,
+    )
+
+    if forward_question:
+        ChatMessage.objects.create(
+            session=direct_session,
+            sender=ai_session.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content=forward_question,
+            is_inherited_from_ai=False,
+        )
+
+    ai_session.status = ChatSession.STATUS_RESOLVED
+    ai_session.handover_reason = reason
+    ai_session.save(update_fields=["status", "handover_reason", "updated_at"])
+
+    ChatMessage.objects.create(
+        session=ai_session,
+        sender=None,
+        sender_type=ChatMessage.SENDER_SYSTEM,
+        content="Percakapan telah dialihkan ke ruang obrolan langsung dengan penjual.",
+        is_inherited_from_ai=False,
+    )
+
     return direct_session
 
 @login_required
@@ -239,8 +285,16 @@ def send_ai_message_api(request, session_id):
             "session_id": str(session.id),
         })
 
-    return JsonResponse({
-        "status": "success",
-        "handover": True,
-        "reply": cleaned_reply,
-    })
+        if is_handover:
+        direct_session = _transfer_to_direct_session(
+            session,
+            reason=ChatSession.HANDOVER_UNANSWERED,
+            forward_question=content
+        )
+        return JsonResponse({
+            "status": "success",
+            "handover": True,
+            "direct_session_id": str(direct_session.id),
+            "reply": cleaned_reply,
+            "message": "Jawaban tidak ada di daftar penjual. Sesi dialihkan ke chat langsung dengan penjual.",
+        })
