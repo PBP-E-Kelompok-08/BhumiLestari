@@ -298,3 +298,31 @@ def send_ai_message_api(request, session_id):
             "reply": cleaned_reply,
             "message": "Jawaban tidak ada di daftar penjual. Sesi dialihkan ke chat langsung dengan penjual.",
         })
+
+
+@login_required
+def escalate_to_seller_api(request, session_id):
+    """
+    POST: Pembeli secara manual mengklik tombol 'Chat dengan Penjual' di dalam chat AI.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user != session.buyer:
+        return _json_error("Hanya pembeli di sesi ini yang dapat beralih ke penjual.", status=403)
+
+    if session.session_type != ChatSession.TYPE_AI:
+        return _json_error("Sesi ini sudah bukan sesi AI.")
+
+    direct_session = _transfer_to_direct_session(
+        session,
+        reason=ChatSession.HANDOVER_MANUAL
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "handover": True,
+        "direct_session_id": str(direct_session.id),
+        "message": "Sesi chat baru langsung dengan penjual berhasil dibuat.",
+    })
