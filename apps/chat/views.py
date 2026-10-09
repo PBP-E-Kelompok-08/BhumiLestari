@@ -26,6 +26,31 @@ def _get_seller_store_name(seller):
     return seller.full_name or seller.email.split('@')[0]
 
 
+
+
+def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, forward_question=None):
+    """
+    Fungsi utilitas untuk membuat sesi baru bertipe 'direct' dengan penjual:
+    1. Membuat ChatSession baru bertipe 'direct' dengan origin_session=ai_session.
+    2. Menyalin semua SessionProductContext dari ai_session ke sesi baru.
+    """
+    direct_session = ChatSession.objects.create(
+        buyer=ai_session.buyer,
+        seller=ai_session.seller,
+        session_type=ChatSession.TYPE_DIRECT,
+        status=ChatSession.STATUS_ACTIVE,
+        origin_session=ai_session,
+        handover_reason=reason,
+    )
+
+    for p_ctx in ai_session.product_contexts.all():
+        SessionProductContext.objects.get_or_create(
+            session=direct_session,
+            product_id=p_ctx.product_id,
+            defaults={"product_name": p_ctx.product_name}
+        )
+    return direct_session
+
 @login_required
 def get_or_create_ai_session_api(request):
     """
