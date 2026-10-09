@@ -424,3 +424,50 @@ def send_direct_message_api(request, session_id):
             "created_at": msg.created_at.isoformat(),
         }
     })
+
+
+# ==============================================================================
+# SELLER INBOX & KNOWLEDGE BASE MANAGEMENT API
+# ==============================================================================
+
+@login_required
+def seller_inbox_sessions_api(request):
+
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    seller = request.user
+    sessions_qs = ChatSession.objects.filter(
+        seller=seller,
+        session_type=ChatSession.TYPE_DIRECT
+    ).order_by("-updated_at")
+
+    results = []
+    for s in sessions_qs:
+        last_msg = s.messages.order_by("-created_at").first()
+        contexts = [
+            {"product_id": c.product_id, "product_name": c.product_name}
+            for c in s.product_contexts.all()
+        ]
+        results.append({
+            "id": str(s.id),
+            "status": s.status,
+            "buyer": {
+                "id": s.buyer.id,
+                "email": s.buyer.email,
+                "name": s.buyer.full_name,
+            },
+            "product_contexts": contexts,
+            "last_message": {
+                "content": last_msg.content if last_msg else None,
+                "sender_type": last_msg.sender_type if last_msg else None,
+                "created_at": last_msg.created_at.isoformat() if last_msg else None,
+            } if last_msg else None,
+            "updated_at": s.updated_at.isoformat(),
+        })
+
+    return JsonResponse({
+        "status": "success",
+        "total_sessions": len(results),
+        "sessions": results,
+    })

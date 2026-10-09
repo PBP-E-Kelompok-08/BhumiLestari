@@ -6,6 +6,7 @@ from apps.chat.views import (
     escalate_to_seller_api,
     send_direct_message_api,
     get_session_messages_api,
+    seller_inbox_sessions_api,
 )
 
 app_name = "chat"
@@ -19,4 +20,7 @@ urlpatterns = [
     # General / Direct Chat Messages
     path("chat/api/sessions/<uuid:session_id>/direct-send/", send_direct_message_api, name="send_direct_message"),
     path("chat/api/sessions/<uuid:session_id>/messages/", get_session_messages_api, name="get_session_messages"),
+
+    # Seller Inbox & Product Knowledge Base Management
+    path("chat/api/seller/sessions/", seller_inbox_sessions_api, name="seller_inbox_sessions"),
 ]
