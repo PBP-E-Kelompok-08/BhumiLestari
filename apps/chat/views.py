@@ -326,3 +326,101 @@ def escalate_to_seller_api(request, session_id):
         "direct_session_id": str(direct_session.id),
         "message": "Sesi chat baru langsung dengan penjual berhasil dibuat.",
     })
+
+
+@login_required
+def get_session_messages_api(request, session_id):
+    """
+    GET: Mengambil seluruh riwayat pesan suatu sesi.
+    """
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user not in (session.buyer, session.seller) and not request.user.is_staff:
+        return _json_error("Anda tidak memiliki akses ke sesi ini.", status=403)
+
+    messages_qs = session.messages.all()
+    messages_data = [
+        {
+            "id": str(m.id),
+            "sender_type": m.sender_type,
+            "sender_email": m.sender.email if m.sender else None,
+            "sender_name": m.sender.full_name if m.sender else ("AI Assistant" if m.sender_type == "ai" else "Sistem"),
+            "content": m.content,
+            "is_inherited_from_ai": m.is_inherited_from_ai,
+            "created_at": m.created_at.isoformat(),
+        }
+        for m in messages_qs
+    ]
+
+    contexts = [
+        {"product_id": c.product_id, "product_name": c.product_name}
+        for c in session.product_contexts.all()
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "session": {
+            "id": str(session.id),
+            "session_type": session.session_type,
+            "status": session.status,
+            "handover_reason": session.handover_reason,
+            "origin_session_id": str(session.origin_session_id) if session.origin_session_id else None,
+            "buyer": {"id": session.buyer.id, "email": session.buyer.email, "name": session.buyer.full_name},
+            "seller": {
+                "id": session.seller.id,
+                "email": session.seller.email,
+                "store_name": _get_seller_store_name(session.seller),
+            },
+            "product_contexts": contexts,
+        },
+        "messages": messages_data,
+    })
+
+
+@login_required
+def send_direct_message_api(request, session_id):
+    """
+    Payload: {"content": "ini chat ke penjual"}
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user not in (session.buyer, session.seller):
+        return _json_error("Akses ditolak.", status=403)
+
+    if session.session_type != ChatSession.TYPE_DIRECT:
+        return _json_error("Endpoint ini hanya untuk sesi obrolan langsung (direct).", status=400)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    content = str(data.get("content", "")).strip()
+    if not content:
+        return _json_error("Content pesan tidak boleh kosong.")
+
+    sender_type = ChatMessage.SENDER_BUYER if request.user == session.buyer else ChatMessage.SENDER_SELLER
+
+    msg = ChatMessage.objects.create(
+        session=session,
+        sender=request.user,
+        sender_type=sender_type,
+        content=content,
+        is_inherited_from_ai=False,
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "message": {
+            "id": str(msg.id),
+            "sender_type": msg.sender_type,
+            "sender_email": request.user.email,
+            "content": msg.content,
+            "is_inherited_from_ai": msg.is_inherited_from_ai,
+            "created_at": msg.created_at.isoformat(),
+        }
+    })
