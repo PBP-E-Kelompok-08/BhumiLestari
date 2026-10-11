@@ -120,3 +120,4 @@ sftp-config.json
 
 # macOS
 .DS_Store
+media/
