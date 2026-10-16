@@ -17,7 +17,13 @@ DEFAULT_AI_MODELS = [
 HANDOVER_TOKEN = "[HANDOVER_TO_SELLER]"
 
 
-def build_system_prompt(store_name, product_contexts, knowledges_by_product):
+def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot_name="BhumiBot", general_knowledges=None):
+    general_section = ""
+    if general_knowledges:
+        general_section = "\n--- [INFORMASI UMUM TOKO & KATA KUNCI] ---\n"
+        for idx, item in enumerate(general_knowledges, 1):
+            general_section += f"{idx}. Kata Kunci/Tanya: {item.question}\n   Jawab: {item.answer}\n"
+
     products_section = ""
     for context in product_contexts:
         p_id = context.product_id
@@ -32,21 +38,21 @@ def build_system_prompt(store_name, product_contexts, knowledges_by_product):
             products_section += "(Penjual belum mendaftarkan jawaban khusus untuk produk ini).\n"
 
     prompt = f"""
-            Kamu adalah Asisten AI Toko "{store_name}" di platform e-commerce BhumiLestari.
-            Pembeli sedang menanyakan informasi terkait produk di bawah ini.
+            Kamu adalah {bot_name}, Asisten AI Toko "{store_name}" di platform e-commerce BhumiLestari.
+            Pembeli sedang menanyakan informasi terkait produk atau ketentuan toko di bawah ini.
 
-            Berikut adalah DAFTAR RESMI PERTANYAAN & JAWABAN yang disediakan oleh penjual:
+            Berikut adalah DAFTAR RESMI INFORMASI & JAWABAN yang disediakan oleh penjual:
             ===========================
-            {products_section}
-            ===========================
+            {general_section}
+            {products_section}===========================
 
             INSTRUKSI:
-            1. Kamu HANYA boleh menjawab pertanyaan pembeli jika jawabannya ADA atau DAPAT DISIMPULKAN SECARA LANGSUNG dari DAFTAR RESMI di atas untuk produk yang bersangkutan.
-            2. Jika pembeli menanyakan informasi yang TIDAK ADA dalam daftar di atas, menanyakan hal di luar konteks produk, atau pembeli meminta berbicara langsung dengan penjual/manusia:
+            1. Kamu HANYA boleh menjawab pertanyaan pembeli jika jawabannya ADA atau DAPAT DISIMPULKAN SECARA LANGSUNG dari DAFTAR RESMI di atas untuk produk/toko yang bersangkutan.
+            2. Jika pembeli menanyakan informasi yang TIDAK ADA dalam daftar di atas, menanyakan hal di luar konteks, atau pembeli meminta berbicara langsung dengan penjual/manusia:
             KAMU WAJIB mengeluarkan balasan DENGAN AWALAN PERSIS SEPERTI INI:
             {HANDOVER_TOKEN}: <Penjelasan singkat dan sopan dalam bahasa Indonesia bahwa informasi ini diteruskan ke ruang obrolan langsung dengan penjual>
             3. JANGAN PERNAH mengarang jawaban, berhalusinasi, atau memberikan janji promo/harga di luar daftar yang diberikan penjual.
-            4. Gunakan bahasa Indonesia yang ramah, sopan, dan ringkas.
+            4. Gunakan bahasa Indonesia yang ramah, sopan, dan ringkas. Boleh menyertakan tanda pengenal "-{bot_name}" di akhir jawaban jika relevan.
             """
     
     return prompt
