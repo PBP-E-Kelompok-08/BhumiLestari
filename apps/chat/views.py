@@ -6,7 +6,13 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt 
 from django.contrib.auth import get_user_model
 
-from apps.chat.models import ProductKnowledge, ChatSession, SessionProductContext, ChatMessage
+from apps.chat.models import (
+    ProductKnowledge,
+    ChatSession,
+    SessionProductContext,
+    ChatMessage,
+    SellerChatSettings,
+)
 from apps.chat.services.ai_service import (
     build_system_prompt,
     query_openrouter,
@@ -621,6 +627,69 @@ def seller_knowledge_detail_api(request, pk):
         return JsonResponse({
             "status": "success",
             "message": "Knowledge Q&A berhasil dihapus.",
+        })
+
+    return _json_error("Metode tidak didukung.", status=405)
+
+
+@login_required
+def seller_chat_settings_api(request):
+    settings_obj = _get_seller_chat_settings(request.user)
+
+    if request.method == "GET":
+        return JsonResponse({
+            "status": "success",
+            "settings": {
+                "is_auto_reply_enabled": settings_obj.is_auto_reply_enabled,
+                "bot_name": settings_obj.bot_name,
+                "welcome_message": settings_obj.welcome_message,
+                "operating_hours_start": settings_obj.operating_hours_start.strftime("%H:%M") if hasattr(settings_obj.operating_hours_start, "strftime") else str(settings_obj.operating_hours_start)[:5],
+                "operating_hours_end": settings_obj.operating_hours_end.strftime("%H:%M") if hasattr(settings_obj.operating_hours_end, "strftime") else str(settings_obj.operating_hours_end)[:5],
+                "closed_message": settings_obj.closed_message,
+                "updated_at": settings_obj.updated_at.isoformat(),
+            }
+        })
+
+    elif request.method in ("POST", "PUT", "PATCH"):
+        try:
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except json.JSONDecodeError:
+            return _json_error("Format JSON tidak valid.")
+
+        if "is_auto_reply_enabled" in data:
+            settings_obj.is_auto_reply_enabled = bool(data["is_auto_reply_enabled"])
+        if "bot_name" in data:
+            settings_obj.bot_name = str(data["bot_name"]).strip() or "BhumiBot"
+        if "welcome_message" in data:
+            settings_obj.welcome_message = str(data["welcome_message"]).strip()
+        if "closed_message" in data:
+            settings_obj.closed_message = str(data["closed_message"]).strip()
+
+        if "operating_hours_start" in data:
+            try:
+                settings_obj.operating_hours_start = datetime.strptime(str(data["operating_hours_start"]).strip(), "%H:%M").time()
+            except ValueError:
+                return _json_error("Format operating_hours_start harus HH:MM (contoh 08:00).")
+
+        if "operating_hours_end" in data:
+            try:
+                settings_obj.operating_hours_end = datetime.strptime(str(data["operating_hours_end"]).strip(), "%H:%M").time()
+            except ValueError:
+                return _json_error("Format operating_hours_end harus HH:MM (contoh 19:00).")
+
+        settings_obj.save()
+
+        return JsonResponse({
+            "status": "success",
+            "message": "Pengaturan bot berhasil disimpan.",
+            "settings": {
+                "is_auto_reply_enabled": settings_obj.is_auto_reply_enabled,
+                "bot_name": settings_obj.bot_name,
+                "welcome_message": settings_obj.welcome_message,
+                "operating_hours_start": settings_obj.operating_hours_start.strftime("%H:%M") if hasattr(settings_obj.operating_hours_start, "strftime") else str(settings_obj.operating_hours_start)[:5],
+                "operating_hours_end": settings_obj.operating_hours_end.strftime("%H:%M") if hasattr(settings_obj.operating_hours_end, "strftime") else str(settings_obj.operating_hours_end)[:5],
+                "closed_message": settings_obj.closed_message,
+            }
         })
 
     return _json_error("Metode tidak didukung.", status=405)
