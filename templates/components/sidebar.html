@@ -1,0 +1,98 @@
+{% load static %}
+
+<aside class="sidebar">
+    <ul class="sidebar-menu">
+        <li>
+            <a href="{% url 'dashboard:show_dashboard_home' %}">
+                <img class="sidebar-logo" src="{% static 'img/katalog.png' %}" alt="Logo katalog">
+                Katalog</a>
+        </li>
+
+        {% if user.is_superuser %}
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/manage_toko.png' %}" alt="Logo manajemen toko">
+                Manajemen Toko</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo manajemen chat">
+                Manajemen Chat</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan keuangan">
+                Laporan Keuangan</a>
+            </li>
+
+        {% elif user.role == "seller" %}
+            <li>
+                <a href="#">
+                    <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ringkasan">
+                    Ringkasan</a>
+            </li>
+            <li>
+                <a href="#">
+                    <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo pesanan">
+                    Pesanan</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan penjualan">
+                Laporan Penjualan</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo chat">
+                Chat</a>
+            </li>
+
+        {% elif user.role == "buyer" %}
+            <li>
+                <a href="#">
+                    <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo keranjang">
+                    Keranjang</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo chat">
+                Chat</a>
+            </li>
+            <li>
+                <a href="#">
+                <img class="sidebar-logo" src="{% static 'img/riwayat_beli.png' %}" alt="Logo riwayat beli">
+                Riwayat Pembelian</a>
+            </li>
+        {% endif %}
+    </ul>
+
+    {% if user.is_authenticated %}
+        <div class="sidebar-user">
+            <img class="sidebar-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+
+            {% if user.is_superuser %}
+                <div class = "user-info"><strong>Admin</strong><br>Etmin</div>
+            {% elif user.role == "seller" %}
+                <div class = "user-info"><strong>{{ user.seller_profile.store_name }}</strong><br>Penjual</div>
+            {% elif user.role == "buyer" %}
+                <div class = "user-info"><strong>{{ user.full_name }}</strong><br>Pembeli</div>
+            {% else %}
+                <div class = "user-info"><strong>Guest</strong>Tamu<br></div>
+            {% endif %}
+
+            <button type="button" class="sidebar-gear" aria-label="Menu pengguna">
+                <img src="{% static 'img/settings.png' %}" alt="Pengaturan">
+            </button>
+
+            <ul class="sidebar-popup" hidden>
+                <li><a href="#">Pengaturan Akun</a></li>
+                <li>
+                    <form method="post" action="{% url 'users:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" style="color:red">Keluar</button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+    {% endif %}
+</aside>

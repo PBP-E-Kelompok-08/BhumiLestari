@@ -7,50 +7,66 @@
 {% endblock meta %}
 
 {% block content %}
-<main class="dash-page role-seller">
-    <h1 class="dash-title">Produk Toko Eco Friendly</h1>
+<div class="dash-layout role-{{ user.role|default:'guest' }}">
+    <main class="dash-page">
+        <h1 class="dash-title">Selamat Datang {{ name }}!</h1>
 
-    <div class="dash-toolbar">
-        <select class="dash-btn" aria-label="Urutkan produk">
-            <option>Sort by</option>
-            <option>Terlaris</option>
-            <option>Terbaru</option>
-        </select>
-        <a href="#" class="dash-btn-seller">+ Tambah Produk</a>
-    </div>
+        <div class="dash-toolbar">
+            <select class="dash-btn" aria-label="Urutkan produk">
+                <option>Urutkan Produk</option>
+                <option>Terlaris</option>
+                <option>Terbaru</option>
+            </select>
 
-    <div class="dash-grid">
-        <article class="dash-card">
-            <div class="dash-card-img">
-                <img src="{% static 'img/toples.png' %}" alt="Toples Kaca Bamboo Series">
-            </div>
-            <h2 class="dash-card-name">Toples Kaca Bamboo Series</h2>
-            <div class="dash-card-price">
-                <span>Rp. 18.000</span>
-                <span class="dash-badge">Diskon: 20%</span>
-            </div>
-            <div class="dash-card-actions">
-                <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
-                <a href="#" class="dash-btn-seller">Edit Item</a>
-                <button type="button" class="dash-btn-danger-seller">Delete Item</button>
-            </div>
-        </article>
+            {% if user.role == "seller" %}
+                <a href="#" class="dash-btn-seller">+ Tambah Produk</a>
+            {% endif %}
+        </div>
 
-        <article class="dash-card">
-            <div class="dash-card-img">
-                <img src="{% static 'img/totebag.png' %}" alt="Totebag Plain Series">
-            </div>
-            <h2 class="dash-card-name">Totebag Plain Series</h2>
-            <div class="dash-card-price">
-                <span>Rp. 16.000</span>
-            </div>
-            <div class="dash-card-actions">
-                <a href="#" class="dash-btn-guest">Tambah ke Keranjang</a>
-                <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
-                <a href="#" class="dash-btn-seller">Edit Item</a>
-                <button type="button" class="dash-btn-danger-seller">Delete Item</button>
-            </div>
-        </article>
-    </div>
-</main>
+        <div class="dash-grid">
+            <article class="dash-card">
+                <div class="dash-card-img">
+                    <img src="{% static 'img/toples.png' %}" alt="Toples Kaca Bamboo Series">
+                </div>
+                <h2 class="dash-card-name">Toples Kaca Bamboo Series</h2>
+                <div class="dash-card-price">
+                    <span>Rp. 18.000</span>
+                    <span class="dash-badge">Diskon: 20%</span>
+                </div>
+                <div class="dash-card-actions">
+                    {% if user.role == "seller" %}
+                        <a href="#" class="dash-btn-seller">Edit Item</a>
+                        <button type="button" class="dash-btn-danger-seller">Delete Item</button>
+                    {% elif user.role == "buyer" %}
+                        <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
+                    {% else %}
+                        <a href="{% url 'users:login' %}" class="dash-btn-guest">Tambah ke Keranjang</a>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="dash-card">
+                <div class="dash-card-img">
+                    <img src="{% static 'img/totebag.png' %}" alt="Totebag Plain Series">
+                </div>
+                <h2 class="dash-card-name">Totebag Plain Series</h2>
+                <div class="dash-card-price">
+                    <span>Rp. 16.000</span>
+                </div>
+                <div class="dash-card-actions">
+                    {% if user.role == "seller" %}
+                        <a href="#" class="dash-btn-seller">Edit Item</a>
+                        <button type="button" class="dash-btn-danger-seller">Delete Item</button>
+                    {% elif user.role == "buyer" %}
+                        <button type="button" class="dash-btn-buyer">Tambah ke Keranjang</button>
+                    {% else %}
+                        <a href="{% url 'users:login' %}" class="dash-btn-guest">Tambah ke Keranjang</a>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+    </main>
+</div>
+
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock content %}
