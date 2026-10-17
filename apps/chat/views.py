@@ -643,8 +643,8 @@ def seller_chat_settings_api(request):
                 "is_auto_reply_enabled": settings_obj.is_auto_reply_enabled,
                 "bot_name": settings_obj.bot_name,
                 "welcome_message": settings_obj.welcome_message,
-                "operating_hours_start": settings_obj.operating_hours_start.strftime("%H:%M") if hasattr(settings_obj.operating_hours_start, "strftime") else str(settings_obj.operating_hours_start)[:5],
-                "operating_hours_end": settings_obj.operating_hours_end.strftime("%H:%M") if hasattr(settings_obj.operating_hours_end, "strftime") else str(settings_obj.operating_hours_end)[:5],
+                "operating_hours_start": _format_time_str(settings_obj.operating_hours_start),
+                "operating_hours_end": _format_time_str(settings_obj.operating_hours_end),
                 "closed_message": settings_obj.closed_message,
                 "updated_at": settings_obj.updated_at.isoformat(),
             }
@@ -686,8 +686,8 @@ def seller_chat_settings_api(request):
                 "is_auto_reply_enabled": settings_obj.is_auto_reply_enabled,
                 "bot_name": settings_obj.bot_name,
                 "welcome_message": settings_obj.welcome_message,
-                "operating_hours_start": settings_obj.operating_hours_start.strftime("%H:%M") if hasattr(settings_obj.operating_hours_start, "strftime") else str(settings_obj.operating_hours_start)[:5],
-                "operating_hours_end": settings_obj.operating_hours_end.strftime("%H:%M") if hasattr(settings_obj.operating_hours_end, "strftime") else str(settings_obj.operating_hours_end)[:5],
+                "operating_hours_start": _format_time_str(settings_obj.operating_hours_start),
+                "operating_hours_end": _format_time_str(settings_obj.operating_hours_end),
                 "closed_message": settings_obj.closed_message,
             }
         })
