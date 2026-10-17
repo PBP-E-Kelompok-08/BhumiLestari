@@ -540,7 +540,7 @@ def seller_knowledge_list_create_api(request):
         except json.JSONDecodeError:
             return _json_error("Format JSON tidak valid.")
 
-        product_id = str(data.get("product_id", "")).strip()
+        product_id = str(data.get("product_id", "")).strip() or None
         product_name = str(data.get("product_name", "")).strip()
         question = str(data.get("question", "")).strip()
         answer = str(data.get("answer", "")).strip()
@@ -693,3 +693,20 @@ def seller_chat_settings_api(request):
         })
 
     return _json_error("Metode tidak didukung.", status=405)
+
+
+@login_required
+def seller_knowledge_toggle_api(request, pk):
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    item = get_object_or_404(ProductKnowledge, id=pk, seller=request.user)
+    item.is_active = not item.is_active
+    item.save(update_fields=["is_active"])
+
+    return JsonResponse({
+        "status": "success",
+        "id": item.id,
+        "is_active": item.is_active,
+        "message": f"Kata kunci '{item.question}' sekarang {'aktif' if item.is_active else 'nonaktif'}."
+    })
