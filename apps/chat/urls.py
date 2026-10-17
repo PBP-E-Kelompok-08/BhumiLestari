@@ -8,7 +8,8 @@ from apps.chat.views import (
     get_session_messages_api,
     seller_inbox_sessions_api,
     seller_knowledge_list_create_api,
-    seller_knowledge_detail_api
+    seller_knowledge_detail_api,
+    seller_chat_settings_api
 )
 
 app_name = "chat"
@@ -28,4 +29,5 @@ urlpatterns = [
     path("chat/api/seller/sessions/", seller_inbox_sessions_api, name="seller_inbox_sessions"),
     path("chat/api/seller/knowledge/", seller_knowledge_list_create_api, name="seller_knowledge_list_create"),
     path("chat/api/seller/knowledge/<int:pk>/", seller_knowledge_detail_api, name="seller_knowledge_detail"),
+    path("chat/api/seller/settings/", seller_chat_settings_api, name="seller_chat_settings"),
 ]

@@ -6,7 +6,13 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from apps.chat.models import ProductKnowledge, ChatSession, SessionProductContext, ChatMessage
+from apps.chat.models import (
+    ProductKnowledge,
+    ChatSession,
+    SessionProductContext,
+    ChatMessage,
+    SellerChatSettings,
+)
 from apps.chat.services.ai_service import (
     build_system_prompt,
     parse_handover_signal,
@@ -141,6 +147,12 @@ class ChatAPITest(TestCase):
             password="password123",
             role=User.ROLE_BUYER,
         )
+
+        # Pastikan default jam operasional toko buka selama unit testing standar
+        settings_obj, _ = SellerChatSettings.objects.get_or_create(seller=self.seller)
+        settings_obj.operating_hours_start = "00:00"
+        settings_obj.operating_hours_end = "23:59"
+        settings_obj.save()
 
         # Knowledge base
         ProductKnowledge.objects.create(
@@ -332,3 +344,48 @@ class ChatAPITest(TestCase):
         del_resp = self.client.delete(detail_url)
         self.assertEqual(del_resp.status_code, 200)
         self.assertFalse(ProductKnowledge.objects.filter(id=item_id).exists())
+
+    def test_seller_chat_settings_api(self):
+        self.client.login(username="seller@test.com", password="password123")
+        url = reverse("chat:seller_chat_settings")
+
+        # GET: Read default settings
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "success")
+        self.assertTrue(data["settings"]["is_auto_reply_enabled"])
+
+        # PUT: Update settings
+        update_data = {
+            "bot_name": "EucalypBot",
+            "welcome_message": "Halo dari Toko Eucalyptus!",
+            "operating_hours_start": "09:00",
+            "operating_hours_end": "17:00",
+            "closed_message": "Toko sedang tutup. Harap tinggalkan pesan.",
+            "is_auto_reply_enabled": True,
+        }
+        resp_put = self.client.put(url, data=json.dumps(update_data), content_type="application/json")
+        self.assertEqual(resp_put.status_code, 200)
+        self.assertEqual(resp_put.json()["settings"]["bot_name"], "EucalypBot")
+        self.assertEqual(resp_put.json()["settings"]["welcome_message"], "Halo dari Toko Eucalyptus!")
+
+    @patch("apps.chat.views._is_store_open", return_value=False)
+    def test_outside_operating_hours_reply(self, mock_open):
+        # Configure seller settings to be closed right now
+        settings_obj, _ = SellerChatSettings.objects.get_or_create(seller=self.seller)
+        settings_obj.closed_message = "Toko sedang istirahat malam."
+        settings_obj.save()
+
+        self.client.login(username="buyer@test.com", password="password123")
+        session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+        )
+        url = reverse("chat:send_ai_message", args=[session.id])
+        resp = self.client.post(url, data=json.dumps({"content": "Halo apa kabar?"}), content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get("is_closed"))
+        self.assertIn("Toko sedang istirahat malam.", data["reply"])
