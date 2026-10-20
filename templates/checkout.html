@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load rupiah %}
+
+{% block meta %}
+<title>Checkout - BhumiLestari</title>
+<link rel="stylesheet" href="{% static 'css/cart_checkout.css' %}?v=4">
+{% endblock meta %}
+
+{% block content %}
+<main class="cc-page">
+    <h1 class="cc-title">Checkout</h1>
+
+    <form class="checkout-form" method="post" action="">
+        {% csrf_token %}
+
+        <section class="cc-card">
+            <div class="co-row-between">
+                <h2>Alamat Pengiriman</h2>
+                <button type="button" class="co-link">Ganti</button>
+            </div>
+            <p><strong>Penerima :</strong> {{ recipient_name }}</p>
+            <p>{{ address }}</p>
+        </section>
+
+        <section class="cc-card">
+            <h2>Opsi Pengiriman</h2>
+            <div class="pill-row">
+                {% for opt in shipping_options %}
+                <div class="pill">
+                    <input type="radio" name="shipping_method" id="ship-{{ forloop.counter }}"
+                           value="{{ opt }}" {% if forloop.first %}checked{% endif %}>
+                    <label for="ship-{{ forloop.counter }}">{{ opt }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="cc-card">
+            <h2>Metode Pembayaran</h2>
+            <div class="pill-grid">
+                {% for opt in payment_options %}
+                <div class="pill pill-wide">
+                    <input type="radio" name="payment_method" id="pay-{{ forloop.counter }}"
+                           value="{{ opt }}" {% if opt == "Cash On Delivery" %}checked{% endif %}>
+                    <label for="pay-{{ forloop.counter }}">{{ opt }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="cc-card">
+            <div class="summary-line">
+                <span>Total harga [{{ item_count }} Barang]:</span>
+                <span>Rp. {{ items_total|rupiah }}</span>
+            </div>
+            <div class="summary-line">
+                <span>Total Ongkir</span>
+                <span>Rp. {{ shipping_cost|rupiah }}</span>
+            </div>
+            <div class="summary-row summary-total">
+                <span>Total :</span>
+                <span>Rp. {{ grand_total|rupiah }}</span>
+            </div>
+            <button type="submit" class="cc-btn">BUAT PESANAN</button>
+        </section>
+    </form>
+</main>
+{% endblock content %}
