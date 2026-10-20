@@ -18,7 +18,7 @@ Marketplace yang menjual berbagai macam produk eco-friendly (pakaian, perlengkap
 Semua orang yang peduli terkait masalah lingkungan dan ingin berusaha mengurangi dampaknya dengan menggunakan produk eco-friendly. 
 </div>
 
-## Masalah yg diatasi
+## Fokus Masalah
 <div align = “justify>
 Akses terhadap produk eco-friendly di Indonesia masih cukup terbatas karena belum adanya marketplace yang terintegrasi. Untuk meningkatkan kesadaran dan kemudahan pembelian, kami berusaha untuk menyediakan platform marketplace produk eco-friendly (BhumiLestari) dari penjual Indonesia yang terverifikasi ramah lingkungan dan dengan harga yang terjangkau.
 </div>
@@ -38,10 +38,10 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 ## CRUD Tiap Modul
 | Modul | Create | Read | Update | Delete|
 | --- | --- | --- | --- | --- |
-| User | Sign Up membuat user baru (seller/buyer) | Melihat profil diri sendiri / user lain | Mengupdate profil diri sendiri | Menghapus akun |
-| Produk | Membuat produk (seller) | Melihat produk | Mengedit detail produk (seller) | Menghapus produk (seller) |
+| User | (Seller/Buyer) Sign Up membuat user baru | Melihat profil diri sendiri / user lain | Mengupdate profil diri sendiri | Menghapus akun |
+| Produk | (Seller) Membuat produk | Melihat produk | (Seller) Mengedit detail produk | (Seller) Menghapus produk |
 | Chat | Membuat session chat baru antara buyer dan seller | Melihat isi chat dan list chat session | Mengupdate isi chat ketika chat baru terkirim | Menghapus chat yang sudah dikirim |
-| Ulasan Toko | Membuat ulasan (buyer) | Melihat ulasan toko yang ada | Mengupdate ulasan yang diposting kurang dari 7 hari (buyer) | Menghapus ulasan yang telah dibuat (buyer) |
+| Ulasan Toko | (Buyer) Membuat ulasan untuk produk yang pernah dibeli. (Seller) Membalas ulasan (pesan singkat) & melaporkan ulasan | (Buyer) Melihat ulasan toko (filter bintang/foto/produk, urutan) dan "Ulasan Saya". (Seller) Melihat ulasan produk di tokonya (filter belum dibalas) | (Buyer) Mengubah ulasan < 7 hari sejak diposting. (Seller) Mengubah balasan < 1 hari sejak balasan diposting | (Buyer) Menghapus ulasannya. (Seller) Menghapus balasannya |
 | Keranjang | Menambah barang ke keranjang | Melihat keranjangnya sendiri | Mengupdate jumlah produk di keranjang | Menghapus produk dari keranjang |
 
 ## Public API/Mock API
@@ -49,4 +49,3 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 | --- | --- | --- |
 | 1. | Mock API data hasil uji produk eco-friendly tiap company partner| <a href="https://drive.google.com/drive/u/1/folders/1sHDq1ZUiYRcyWkg-OhxK9_KpdaMj3ptn"> Google Drive </a>
 | 2. | Open Router API untuk chatbot| <a href="https://openrouter.ai/"> OpenRouter </a>|
-
