@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+    <title>Tambah Produk - Bhumi Lestari</title>
+{% endblock meta %}
+
+{% block content %}
+<main class="settings">
+    <h1>Tambah Produk</h1>
+
+    <section class="add-product">
+        <form method="post" action="#" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            {% for field in form %}
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}
+                    <p class="error">{{ error }}</p>
+                {% endfor %}
+            {% endfor %}
+
+            <button type="submit">Simpan Produk</button>
+        </form>
+    </section>
+</main>
+{% endblock content %}
