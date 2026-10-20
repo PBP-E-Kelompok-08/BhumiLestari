@@ -16,10 +16,12 @@
     justify-content: space-between;
     background: #4D665D;
     color: #F2EAC0;
+    transition: margin-left 0.3s ease, visibility 0.3s;
 }
 
 .layout.sidebar-closed .sidebar { 
-    display: none; 
+    margin-left: -16rem;
+    visibility: hidden;
 }
 
 .sidebar-menu { 
@@ -101,4 +103,27 @@
     font: inherit;
     color: inherit;
     cursor: pointer;
+}
+
+/*Untuk tampilan HP*/
+@media (max-width: 600px) {
+    .sidebar {
+        position: fixed;
+        top: 53px;
+        width: 100%;
+        z-index: 10;
+        overflow: hidden;
+        max-height: 30rem;
+        transition: 0.3s;
+    }
+
+    .layout.sidebar-closed .sidebar {
+        margin-left: 0;
+        max-height: 0;
+    }
+
+    .sidebar-popup {
+        left: 20rem;
+    }
+
 }

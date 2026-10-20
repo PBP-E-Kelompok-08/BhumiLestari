@@ -84,6 +84,11 @@ body {
 
 .menu {
     height: 1.5rem;
+    transition: transform 0.5s ease;
+}
+
+.menu.is-open {
+    transform: rotate(90deg);
 }
 
 p {
