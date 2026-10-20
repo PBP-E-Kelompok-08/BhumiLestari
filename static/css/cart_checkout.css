@@ -73,6 +73,27 @@
 .qty-btn:disabled { opacity: 0.35; cursor: default; }
 .qty-stepper { user-select: none; }
 
+.cc-modal {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.cc-modal[hidden] { display: none; }
+.cc-modal-box {
+    background: var(--cc-card); width: 360px; max-width: 90vw;
+    padding: 24px 28px; border-radius: 12px;
+}
+.cc-modal-box h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.cc-modal-box p { margin: 0 0 20px; font-size: 0.85rem; }
+.cc-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.cc-modal-actions button {
+    padding: 8px 18px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;
+    border: 1px solid var(--cc-dark); background: transparent; color: var(--cc-dark);
+}
+.cc-modal-actions .cc-modal-confirm { background: var(--cc-dark); color: #fff; }
+
+
+
 /* ---------- Checkout ---------- */
 .checkout-form { max-width: 760px; margin: 0 auto; }
 .co-row-between { display: flex; justify-content: space-between; }

@@ -4,7 +4,7 @@
 
 {% block meta %}
 <title>Keranjang - BhumiLestari</title>
-<link rel="stylesheet" href="{% static 'css/cart_checkout.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'css/cart_checkout.css' %}?v=7">
 {% endblock meta %}
 
 {% block content %}
@@ -16,7 +16,7 @@
             <div class="cc-card cart-header">
                 <label class="cart-check-all">
                     <input type="checkbox" id="select-all">
-                    <span>Pilih Semua <small>({{ item_count }})</small></span>
+                    <span>Pilih Semua <small>(<span id="select-count">{{ item_count }}</span>)</small></span>
                 </label>
                 <button type="button" class="cart-delete-btn">Hapus</button>
             </div>
@@ -62,5 +62,15 @@
         </aside>
     </div>
 </main>
-<script src="{% static 'js/cart.js' %}?v=6"></script>
+<div class="cc-modal" id="delete-modal" hidden>
+    <div class="cc-modal-box" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <h2 id="delete-modal-title">Hapus produk?</h2>
+        <p id="delete-modal-text"></p>
+        <div class="cc-modal-actions">
+            <button type="button" class="cc-modal-cancel" id="delete-cancel">Batal</button>
+            <button type="button" class="cc-modal-confirm" id="delete-confirm">Hapus</button>
+        </div>
+    </div>
+</div>
+<script src="{% static 'js/cart.js' %}?v=8"></script>
 {% endblock content %}
