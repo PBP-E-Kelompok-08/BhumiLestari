@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load rupiah %}
+
+{% block meta %}
+<title>Keranjang - BhumiLestari</title>
+<link rel="stylesheet" href="{% static 'css/cart_checkout.css' %}?v=7">
+{% endblock meta %}
+
+{% block content %}
+<main class="cc-page">
+    <h1 class="cc-title">Keranjang</h1>
+
+    <div class="cart-layout">
+        <section class="cart-list">
+            <div class="cc-card cart-header">
+                <label class="cart-check-all">
+                    <input type="checkbox" id="select-all">
+                    <span>Pilih Semua <small>(<span id="select-count">{{ item_count }}</span>)</small></span>
+                </label>
+                <button type="button" class="cart-delete-btn">Hapus</button>
+            </div>
+
+            {% for store in stores %}
+            <div class="cc-card cart-store">
+                <label class="cart-store-name">
+                    <input type="checkbox" class="store-check">
+                    <span>{{ store.name }}</span>
+                </label>
+
+                {% for item in store.items %}
+                <div class="cart-item" data-item-id="{{ item.id }}" data-price="{{ item.price }}">
+                    <input type="checkbox" class="item-check" {% if item.selected %}checked{% endif %}>
+                    <img class="cart-item-img" src="{% static item.image %}" alt="{{ item.name }}">
+                    <div class="cart-item-info">
+                        <p class="cart-item-name">{{ item.name }}</p>
+                        <p class="cart-item-var">Variations: {{ item.variation }}</p>
+                    </div>
+                    <div class="cart-item-right">
+                        <p class="cart-item-price">Rp. {{ item.price|rupiah }}</p>
+                        <div class="qty-stepper">
+                            <button type="button" class="qty-btn qty-minus">&minus;</button>
+                            <span class="qty-value">{{ item.quantity }}</span>
+                            <button type="button" class="qty-btn qty-plus">+</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% empty %}
+            <div class="cc-card"><p>Keranjang kamu masih kosong.</p></div>
+            {% endfor %}
+        </section>
+
+        <aside class="cc-card cart-summary">
+            <h2>Ringkasan Belanja</h2>
+            <div class="summary-row summary-total">
+                <span>Total:</span>
+                <span id="summary-total">Rp. {{ total|rupiah }}</span>
+            </div>
+            <a href="{% url 'checkout:show_checkout' %}" class="cc-btn" id="checkout-btn">CHECKOUT (<span id="checkout-count">{{ selected_count }}</span>)</a>
+        </aside>
+    </div>
+</main>
+<div class="cc-modal" id="delete-modal" hidden>
+    <div class="cc-modal-box" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <h2 id="delete-modal-title">Hapus produk?</h2>
+        <p id="delete-modal-text"></p>
+        <div class="cc-modal-actions">
+            <button type="button" class="cc-modal-cancel" id="delete-cancel">Batal</button>
+            <button type="button" class="cc-modal-confirm" id="delete-confirm">Hapus</button>
+        </div>
+    </div>
+</div>
+<script src="{% static 'js/cart.js' %}?v=8"></script>
+{% endblock content %}
