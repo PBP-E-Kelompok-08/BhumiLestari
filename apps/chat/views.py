@@ -14,6 +14,8 @@ from apps.chat.models import (
     SellerChatSettings,
     SessionRating,
     UserReport,
+    BroadcastChannel,
+    BroadcastMessage,
 )
 from apps.chat.services.ai_service import (
     build_system_prompt,
@@ -943,3 +945,99 @@ def submit_user_report_api(request):
 # ==============================================================================
 
 @login_required
+
+
+def list_broadcast_channels_api(request):
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    channels = BroadcastChannel.objects.all().order_by("-followers_count")
+    results = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "description": c.description,
+            "seller_email": c.seller.email,
+            "followers_count": c.followers_count,
+            "last_message": {
+                "content": c.messages.first().content if c.messages.exists() else None,
+                "created_at": c.messages.first().created_at.isoformat() if c.messages.exists() else None,
+            }
+        }
+        for c in channels
+    ]
+
+    return JsonResponse({"status": "success", "total": len(results), "channels": results})
+
+
+@login_required
+def get_broadcast_messages_api(request, channel_id):
+
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    channel = get_object_or_404(BroadcastChannel, id=channel_id)
+    messages_qs = channel.messages.all()
+
+    # Naikkan view count
+    if request.user != channel.seller:
+        messages_qs.update(viewed_count=models.F('viewed_count') + 1)
+
+    messages = [
+        {
+            "id": m.id,
+            "content": m.content,
+            "viewed_count": m.viewed_count,
+            "created_at": m.created_at.isoformat(),
+        }
+        for m in channel.messages.all()
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "channel": {
+            "id": channel.id,
+            "name": channel.name,
+            "followers_count": channel.followers_count,
+            "is_owner": request.user == channel.seller,
+        },
+        "messages": messages,
+    })
+
+
+@login_required
+def send_broadcast_message_api(request, channel_id):
+    """
+    Payload: {"content": "Promo 10% Sandal Akupuntur hari ini!"}
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    channel = get_object_or_404(BroadcastChannel, id=channel_id)
+    if request.user != channel.seller:
+        return _json_error("Anda tidak memiliki akses untuk mengirim pesan pada channel ini.", status=403)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    content = str(data.get("content", "")).strip()
+    if not content:
+        return _json_error("Content siaran tidak boleh kosong.")
+
+    b_msg = BroadcastMessage.objects.create(
+        channel=channel,
+        content=content,
+        viewed_count=0,
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "message": {
+            "id": b_msg.id,
+            "content": b_msg.content,
+            "viewed_count": b_msg.viewed_count,
+            "created_at": b_msg.created_at.isoformat(),
+        }
+    }, status=201)
