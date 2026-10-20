@@ -455,32 +455,83 @@ def send_direct_message_api(request, session_id):
 # ==============================================================================
 
 @login_required
-def seller_inbox_sessions_api(request):
+def toggle_archive_session_api(request, session_id):
+    """
+    POST: Mengarsipkan atau membatalkan arsip sesi chat.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user == session.buyer:
+        session.is_archived_by_buyer = not session.is_archived_by_buyer
+        session.save(update_fields=["is_archived_by_buyer"])
+        return JsonResponse({"status": "success", "is_archived": session.is_archived_by_buyer})
+    elif request.user == session.seller:
+        session.is_archived_by_seller = not session.is_archived_by_seller
+        session.save(update_fields=["is_archived_by_seller"])
+        return JsonResponse({"status": "success", "is_archived": session.is_archived_by_seller})
+
+    return _json_error("Akses ditolak.", status=403)
+
+
+# ==============================================================================
+# INBOX API (BUYER & SELLER)
+# ==============================================================================
+
+@login_required
+def buyer_inbox_sessions_api(request):
+    """
+    GET: Daftar sesi chat pembeli sesuai filter tab:
+    ?tab=semua | belum_dibaca | diarsipkan
+    ?search=...
+    """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
 
-    seller = request.user
-    sessions_qs = ChatSession.objects.filter(
-        seller=seller,
-        session_type=ChatSession.TYPE_DIRECT
-    ).order_by("-updated_at")
+    buyer = request.user
+    tab = request.GET.get("tab", "semua").lower()
+    search = request.GET.get("search", "").strip().lower()
+
+    sessions_qs = ChatSession.objects.filter(buyer=buyer).order_by("-updated_at")
+
+    if tab == "diarsipkan":
+        sessions_qs = sessions_qs.filter(is_archived_by_buyer=True)
+    else:
+        sessions_qs = sessions_qs.filter(is_archived_by_buyer=False)
+        if tab == "belum_dibaca":
+            sessions_qs = sessions_qs.filter(
+                messages__is_read=False
+            ).exclude(messages__sender_type=ChatMessage.SENDER_BUYER).distinct()
 
     results = []
     for s in sessions_qs:
         last_msg = s.messages.order_by("-created_at").first()
+        store_name = _get_seller_store_name(s.seller)
+
+        if search:
+            match_store = search in store_name.lower() or search in s.seller.email.lower()
+            match_msg = last_msg and search in last_msg.content.lower()
+            if not (match_store or match_msg):
+                continue
+
+        unread_count = s.messages.filter(is_read=False).exclude(sender_type=ChatMessage.SENDER_BUYER).count()
         contexts = [
             {"product_id": c.product_id, "product_name": c.product_name}
             for c in s.product_contexts.all()
         ]
+
         results.append({
             "id": str(s.id),
+            "session_type": s.session_type,
             "status": s.status,
-            "buyer": {
-                "id": s.buyer.id,
-                "email": s.buyer.email,
-                "name": s.buyer.full_name,
+            "seller": {
+                "id": s.seller.id,
+                "email": s.seller.email,
+                "store_name": store_name,
             },
+            "unread_count": unread_count,
+            "is_archived": s.is_archived_by_buyer,
             "product_contexts": contexts,
             "last_message": {
                 "content": last_msg.content if last_msg else None,
@@ -492,10 +543,88 @@ def seller_inbox_sessions_api(request):
 
     return JsonResponse({
         "status": "success",
+        "tab": tab,
         "total_sessions": len(results),
         "sessions": results,
     })
 
+
+@login_required
+def seller_inbox_sessions_api(request):
+    """
+    GET: Penjual melihat daftar sesi chat langsung dari para pembeli sesuai filter tab:
+    ?tab=semua | belum_dibaca | belum_dibalas
+    ?search=...
+    """
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    seller = request.user
+    tab = request.GET.get("tab", "semua").lower()
+    search = request.GET.get("search", "").strip().lower()
+
+    sessions_qs = ChatSession.objects.filter(
+        seller=seller,
+        session_type=ChatSession.TYPE_DIRECT,
+        is_archived_by_seller=False
+    ).order_by("-updated_at")
+
+    if tab == "belum_dibaca":
+        sessions_qs = sessions_qs.filter(
+            messages__sender_type=ChatMessage.SENDER_BUYER,
+            messages__is_read=False
+        ).distinct()
+
+    results = []
+    for s in sessions_qs:
+        last_msg = s.messages.order_by("-created_at").first()
+
+        if tab == "belum_dibalas":
+            if not last_msg or last_msg.sender_type != ChatMessage.SENDER_BUYER:
+                continue
+
+        buyer_name = s.buyer.full_name or s.buyer.email.split('@')[0]
+        if search:
+            match_buyer = search in buyer_name.lower() or search in s.buyer.email.lower()
+            match_msg = last_msg and search in last_msg.content.lower()
+            if not (match_buyer or match_msg):
+                continue
+
+        unread_count = s.messages.filter(sender_type=ChatMessage.SENDER_BUYER, is_read=False).count()
+        contexts = [
+            {"product_id": c.product_id, "product_name": c.product_name}
+            for c in s.product_contexts.all()
+        ]
+
+        results.append({
+            "id": str(s.id),
+            "status": s.status,
+            "buyer": {
+                "id": s.buyer.id,
+                "email": s.buyer.email,
+                "name": buyer_name,
+            },
+            "unread_count": unread_count,
+            "product_contexts": contexts,
+            "last_message": {
+                "content": last_msg.content if last_msg else None,
+                "sender_type": last_msg.sender_type if last_msg else None,
+                "created_at": last_msg.created_at.isoformat() if last_msg else None,
+            } if last_msg else None,
+            "updated_at": s.updated_at.isoformat(),
+        })
+
+    return JsonResponse({
+        "status": "success",
+        "tab": tab,
+        "total_sessions": len(results),
+        "sessions": results,
+    })
+
+
+# ==============================================================================
+# SELLER SETTINGS & KNOWLEDGE BASE MANAGEMENT
+# ==============================================================================
 
 @login_required
 def seller_knowledge_list_create_api(request):
