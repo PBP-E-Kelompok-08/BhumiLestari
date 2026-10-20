@@ -12,6 +12,8 @@ from apps.chat.models import (
     SessionProductContext,
     ChatMessage,
     SellerChatSettings,
+    SessionRating,
+    UserReport,
 )
 from apps.chat.services.ai_service import (
     build_system_prompt,
@@ -840,3 +842,104 @@ def seller_knowledge_toggle_api(request, pk):
         "is_active": item.is_active,
         "message": f"Kata kunci '{item.question}' sekarang {'aktif' if item.is_active else 'nonaktif'}."
     })
+
+
+def submit_session_rating_api(request, session_id):
+    """
+    Payload: {"rating": 5, "feedback": "Penjual sangat ramah!"}
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    session = get_object_or_404(ChatSession, id=session_id)
+    if request.user != session.buyer:
+        return _json_error("Hanya pembeli yang dapat memberikan rating percakapan.", status=403)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    try:
+        rating_val = int(data.get("rating", 5))
+    except (TypeError, ValueError):
+        return _json_error("Rating harus berupa angka 1 sampai 5.")
+
+    if not 1 <= rating_val <= 5:
+        return _json_error("Rating harus bernilai antara 1 sampai 5.")
+
+    feedback_val = str(data.get("feedback", "")).strip()
+
+    rating_obj, _ = SessionRating.objects.update_or_create(
+        session=session,
+        defaults={
+            "user": request.user,
+            "rating": rating_val,
+            "feedback": feedback_val,
+        }
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Terima kasih atas rating dan feedback Anda!",
+        "rating": {
+            "session_id": str(session.id),
+            "rating": rating_obj.rating,
+            "feedback": rating_obj.feedback,
+            "created_at": rating_obj.created_at.isoformat(),
+        }
+    })
+
+
+@login_required
+def submit_user_report_api(request):
+    """
+    Payload:
+    {
+        "reported_user_id": 2,
+        "session_id": "<uuid-optional>",
+        "reason": "Pembeli berkata kasar dan tidak sopan."
+    }
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return _json_error("Format JSON tidak valid.")
+
+    reported_user_id = data.get("reported_user_id")
+    reason = str(data.get("reason", "")).strip()
+
+    if not reported_user_id or not reason:
+        return _json_error("reported_user_id dan reason wajib diisi.")
+
+    reported_user = get_object_or_404(User, id=reported_user_id)
+    if reported_user == request.user:
+        return _json_error("Anda tidak dapat melaporkan diri sendiri.")
+
+    session = None
+    session_id = data.get("session_id")
+    if session_id:
+        session = ChatSession.objects.filter(id=session_id).first()
+
+    report = UserReport.objects.create(
+        reporter=request.user,
+        reported_user=reported_user,
+        session=session,
+        reason=reason,
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Laporan Anda telah berhasil dikirimkan.",
+        "report_id": report.id,
+    }, status=201)
+
+
+# ==============================================================================
+# BROADCAST CHANNEL API (FIGMA BROADCAST SCREEN)
+# ==============================================================================
+
+@login_required
