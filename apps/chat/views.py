@@ -540,7 +540,8 @@ def seller_knowledge_list_create_api(request):
         except json.JSONDecodeError:
             return _json_error("Format JSON tidak valid.")
 
-        product_id = str(data.get("product_id", "")).strip() or None
+        raw_pid = data.get("product_id")
+        product_id = str(raw_pid).strip() if raw_pid not in (None, "", "null") else None
         product_name = str(data.get("product_name", "")).strip()
         question = str(data.get("question", "")).strip()
         answer = str(data.get("answer", "")).strip()
