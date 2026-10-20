@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hamburger.style.cursor = 'pointer';
         hamburger.addEventListener('click', function () {
             layout.classList.toggle('sidebar-closed');
+            hamburger.classList.toggle('is-open', !layout.classList.contains('sidebar-closed'));
         });
     }
 
