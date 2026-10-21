@@ -5,6 +5,7 @@
 __pycache__/
 db.sqlite3
 media
+media/
 
 # Backup files
 *.bak
@@ -120,3 +121,4 @@ sftp-config.json
 
 # macOS
 .DS_Store
+media/

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'apps.dashboard',
     'apps.products',
     'apps.users',
+    'apps.reviews',
 ]
 
 # Untuk Login/SignUp
@@ -90,6 +91,9 @@ TEMPLATES = [
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 
 WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
@@ -144,7 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'id'
 
 TIME_ZONE = 'UTC'
 
@@ -170,3 +174,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1",
     "https://sultan-noor-bhumilestari.pws.cs.ui.ac.id",
 ]
+
+
+# Media files (foto ulasan yang diunggah pembeli)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

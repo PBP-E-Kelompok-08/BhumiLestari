@@ -1,0 +1,129 @@
+.layout { 
+    display: flex; 
+    flex: 1;
+}
+
+.layout-content { 
+    flex: 1; 
+    min-width: 0;
+}
+
+.sidebar {
+    width: 16rem;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #4D665D;
+    color: #F2EAC0;
+    transition: margin-left 0.3s ease, visibility 0.3s;
+}
+
+.layout.sidebar-closed .sidebar { 
+    margin-left: -16rem;
+    visibility: hidden;
+}
+
+.sidebar-menu { 
+    list-style: none; 
+    margin: 0; 
+    padding: 0; 
+}
+
+.sidebar-menu img {
+    width: 1.2rem;
+}
+
+.sidebar-menu a {
+    display: flex;              
+    align-items: center;        
+    gap: 0.6rem;                
+    padding: 0.6rem 0.8rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.sidebar-menu a:hover { 
+    background: #67877C; 
+}
+
+.sidebar-user { 
+    position: relative; 
+    display: flex; 
+    align-items: center; 
+    gap: 0.6rem; 
+}
+
+.user-info {
+    font-size: 0.9rem;
+}
+
+.sidebar-avatar { 
+    width: 2.5rem; 
+    height: 2.5rem; 
+}
+
+.sidebar-gear { 
+    background: none; 
+    border: none; 
+    cursor: pointer; 
+    margin: 0 0.5rem 0 auto;
+}
+
+.sidebar-gear img { 
+    width: 1.5rem; 
+}
+
+.sidebar-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 5rem;
+    right: 0.75rem;
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+    background: #ffff;    
+    color: black;    
+    border-radius:0.5rem;
+}
+
+.sidebar-popup[hidden] { 
+    display: none; 
+}
+
+.sidebar-popup a,
+.sidebar-popup button {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    text-decoration: none;      
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+/*Untuk tampilan HP*/
+@media (max-width: 600px) {
+    .sidebar {
+        position: fixed;
+        top: 53px;
+        width: 100%;
+        z-index: 10;
+        overflow: hidden;
+        max-height: 30rem;
+        transition: 0.3s;
+    }
+
+    .layout.sidebar-closed .sidebar {
+        margin-left: 0;
+        max-height: 0;
+    }
+
+    .sidebar-popup {
+        left: 20rem;
+    }
+
+}

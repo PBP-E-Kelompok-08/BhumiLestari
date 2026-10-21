@@ -115,3 +115,6 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('dashboard:show_dashboard_home')
+
+def account_settings(request):
+    return render(request, 'account_settings.html')
