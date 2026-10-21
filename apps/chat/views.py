@@ -1,10 +1,12 @@
 import json
 import logging
+from datetime import datetime, time
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt 
 from django.contrib.auth import get_user_model
+from django.db.models import Q, F
 
 from apps.chat.models import (
     ProductKnowledge,
@@ -35,6 +37,46 @@ def _get_seller_store_name(seller):
     if hasattr(seller, 'seller_profile') and seller.seller_profile:
         return seller.seller_profile.store_name
     return seller.full_name or seller.email.split('@')[0]
+
+
+def _get_seller_chat_settings(seller):
+    settings_obj, _ = SellerChatSettings.objects.get_or_create(
+        seller=seller,
+        defaults={
+            "bot_name": "EucalypBot" if "eucalyp" in (seller.email or "").lower() else "BhumiBot"
+        }
+    )
+    return settings_obj
+
+
+def _format_time_str(t):
+    if not t:
+        return "00:00"
+    if hasattr(t, "strftime"):
+        return t.strftime("%H:%M")
+    return str(t)[:5]
+
+
+def _is_store_open(chat_settings):
+    try:
+        from zoneinfo import ZoneInfo
+        now_time = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+    except Exception:
+        now_time = datetime.now().time()
+
+    start = chat_settings.operating_hours_start
+    end = chat_settings.operating_hours_end
+
+    if isinstance(start, str):
+        parts = [int(p) for p in start.split(":")[:2]]
+        start = time(parts[0], parts[1])
+    if isinstance(end, str):
+        parts = [int(p) for p in end.split(":")[:2]]
+        end = time(parts[0], parts[1])
+
+    if start <= end:
+        return start <= now_time <= end
+    return now_time >= start or now_time <= end
 
 
 def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, forward_question=None):
@@ -134,7 +176,9 @@ def get_or_create_ai_session_api(request):
     if buyer == seller:
         return _json_error("Penjual tidak dapat membuka sesi tanya produk ke diri sendiri.")
 
-    # Cari sesi AI aktif yang sudah ada dengan penjual tersebut
+    chat_settings = _get_seller_chat_settings(seller)
+    is_new = False
+
     ai_session = ChatSession.objects.filter(
         buyer=buyer,
         seller=seller,
@@ -149,8 +193,17 @@ def get_or_create_ai_session_api(request):
             session_type=ChatSession.TYPE_AI,
             status=ChatSession.STATUS_ACTIVE,
         )
+        is_new = True
 
-    # Daftarkan konteks produk
+    # Jika sesi baru & auto reply bot aktif, kirim sambutan selamat datang dari bot
+    if is_new and chat_settings.is_auto_reply_enabled and chat_settings.welcome_message:
+        ChatMessage.objects.create(
+            session=ai_session,
+            sender=None,
+            sender_type=ChatMessage.SENDER_AI,
+            content=f"{chat_settings.welcome_message}\n\n-{chat_settings.bot_name}",
+        )
+
     products = data.get("products", [])
     for p in products:
         p_id = str(p.get("product_id", "")).strip()
@@ -175,6 +228,8 @@ def get_or_create_ai_session_api(request):
             "id": seller.id,
             "email": seller.email,
             "store_name": _get_seller_store_name(seller),
+            "bot_name": chat_settings.bot_name,
+            "is_auto_reply_enabled": chat_settings.is_auto_reply_enabled,
         },
         "product_contexts": contexts,
     })
@@ -253,22 +308,55 @@ def send_ai_message_api(request, session_id):
         sender=request.user,
         sender_type=ChatMessage.SENDER_BUYER,
         content=content,
+        is_read=True,
     )
+
+    chat_settings = _get_seller_chat_settings(session.seller)
+    store_name = _get_seller_store_name(session.seller)
+    bot_name = chat_settings.bot_name
+
+    if chat_settings.is_auto_reply_enabled and not _is_store_open(chat_settings):
+        closed_reply = f"{chat_settings.closed_message}\n\n-{bot_name}"
+        ai_msg = ChatMessage.objects.create(
+            session=session,
+            sender=None,
+            sender_type=ChatMessage.SENDER_AI,
+            content=closed_reply,
+        )
+        return JsonResponse({
+            "status": "success",
+            "handover": False,
+            "reply": closed_reply,
+            "is_closed": True,
+            "message_id": str(ai_msg.id),
+            "session_id": str(session.id),
+        })
 
     product_contexts = list(session.product_contexts.all())
     product_ids = [c.product_id for c in product_contexts]
 
-    knowledges = ProductKnowledge.objects.filter(
+    product_qas = ProductKnowledge.objects.filter(
         seller=session.seller,
         product_id__in=product_ids,
         is_active=True
     )
     knowledges_by_product = {}
-    for k in knowledges:
+    for k in product_qas:
         knowledges_by_product.setdefault(k.product_id, []).append(k)
 
-    store_name = _get_seller_store_name(session.seller)
-    system_prompt = build_system_prompt(store_name, product_contexts, knowledges_by_product)
+    general_knowledges = list(ProductKnowledge.objects.filter(
+        Q(product_id__isnull=True) | Q(product_id=""),
+        seller=session.seller,
+        is_active=True
+    ))
+
+    system_prompt = build_system_prompt(
+        store_name,
+        product_contexts,
+        knowledges_by_product,
+        bot_name=bot_name,
+        general_knowledges=general_knowledges
+    )
 
     recent_msgs = session.messages.exclude(id=user_msg.id).order_by("-created_at")[:8]
     recent_msgs = reversed(recent_msgs)
@@ -368,6 +456,12 @@ def get_session_messages_api(request, session_id):
     if request.user not in (session.buyer, session.seller) and not request.user.is_staff:
         return _json_error("Anda tidak memiliki akses ke sesi ini.", status=403)
 
+    # Tandain pesan yang diterima sebagai sudah dibaca
+    if request.user == session.buyer:
+        session.messages.filter(Q(sender_type=ChatMessage.SENDER_SELLER) | Q(sender_type=ChatMessage.SENDER_AI), is_read=False).update(is_read=True)
+    elif request.user == session.seller:
+        session.messages.filter(sender_type=ChatMessage.SENDER_BUYER, is_read=False).update(is_read=True)
+
     messages_qs = session.messages.order_by("created_at")
     messages_data = [
         {
@@ -377,6 +471,7 @@ def get_session_messages_api(request, session_id):
             "sender_name": m.sender.full_name if m.sender else ("AI Assistant" if m.sender_type == "ai" else "Sistem"),
             "content": m.content,
             "is_inherited_from_ai": m.is_inherited_from_ai,
+            "is_read": m.is_read,
             "created_at": m.created_at.isoformat(),
         }
         for m in messages_qs
@@ -387,6 +482,14 @@ def get_session_messages_api(request, session_id):
         for c in session.product_contexts.all()
     ]
 
+    rating_data = None
+    if hasattr(session, 'rating'):
+        rating_data = {
+            "rating": session.rating.rating,
+            "feedback": session.rating.feedback,
+            "created_at": session.rating.created_at.isoformat(),
+        }
+
     return JsonResponse({
         "status": "success",
         "session": {
@@ -395,6 +498,8 @@ def get_session_messages_api(request, session_id):
             "status": session.status,
             "handover_reason": session.handover_reason,
             "origin_session_id": str(session.origin_session_id) if session.origin_session_id else None,
+            "is_archived_by_buyer": session.is_archived_by_buyer,
+            "is_archived_by_seller": session.is_archived_by_seller,
             "buyer": {"id": session.buyer.id, "email": session.buyer.email, "name": session.buyer.full_name},
             "seller": {
                 "id": session.seller.id,
@@ -402,6 +507,7 @@ def get_session_messages_api(request, session_id):
                 "store_name": _get_seller_store_name(session.seller),
             },
             "product_contexts": contexts,
+            "rating": rating_data,
         },
         "messages": messages_data,
     })
@@ -439,7 +545,10 @@ def send_direct_message_api(request, session_id):
         sender_type=sender_type,
         content=content,
         is_inherited_from_ai=False,
+        is_read=False,
     )
+
+    session.save(update_fields=["updated_at"])
 
     return JsonResponse({
         "status": "success",
@@ -449,14 +558,11 @@ def send_direct_message_api(request, session_id):
             "sender_email": request.user.email,
             "content": msg.content,
             "is_inherited_from_ai": msg.is_inherited_from_ai,
+            "is_read": msg.is_read,
             "created_at": msg.created_at.isoformat(),
         }
     })
 
-
-# ==============================================================================
-# SELLER INBOX & KNOWLEDGE BASE MANAGEMENT API
-# ==============================================================================
 
 @login_required
 def toggle_archive_session_api(request, session_id):
@@ -631,143 +737,20 @@ def seller_inbox_sessions_api(request):
 # ==============================================================================
 
 @login_required
-def seller_knowledge_list_create_api(request):
+def seller_chat_settings_api(request):
     """
-    GET: Melihat daftar Q&A yang dimiliki penjual. Opsional filter `?product_id=...`
-    
-    POST: Menambahkan Q&A baru per produk.
+    GET: Mengambil pengaturan bot penjual (Pengaturan Sambutan).
+    POST / PUT / PATCH: Menyimpan perubahan pengaturan bot.
     Payload:
     {
-        "product_id": "PRD-01",
-        "product_name": "Sabun Bambu",
-        "question": "Apakah aman untuk anak-anak?",
-        "answer": "Ya, aman karena formula alami 100%."
+        "is_auto_reply_enabled": true,
+        "bot_name": "EucalypBot",
+        "welcome_message": "Selamat datang di toko kami!",
+        "operating_hours_start": "08:00",
+        "operating_hours_end": "19:00",
+        "closed_message": "Mohon maaf toko sedang tutup."
     }
     """
-    seller = request.user
-
-    if request.method == "GET":
-        qs = ProductKnowledge.objects.filter(seller=seller)
-        product_id = request.GET.get("product_id")
-        if product_id:
-            qs = qs.filter(product_id=product_id)
-
-        items = [
-            {
-                "id": k.id,
-                "product_id": k.product_id,
-                "product_name": k.product_name,
-                "question": k.question,
-                "answer": k.answer,
-                "is_active": k.is_active,
-                "created_at": k.created_at.isoformat(),
-                "updated_at": k.updated_at.isoformat(),
-            }
-            for k in qs
-        ]
-        return JsonResponse({"status": "success", "total": len(items), "knowledges": items})
-
-    elif request.method == "POST":
-        try:
-            data = json.loads(request.body.decode("utf-8")) if request.body else {}
-        except json.JSONDecodeError:
-            return _json_error("Format JSON tidak valid.")
-
-        raw_pid = data.get("product_id")
-        product_id = str(raw_pid).strip() if raw_pid not in (None, "", "null") else None
-        product_name = str(data.get("product_name", "")).strip()
-        question = str(data.get("question", "")).strip()
-        answer = str(data.get("answer", "")).strip()
-
-        if not product_id or not question or not answer:
-            return _json_error("product_id, question, dan answer wajib diisi.")
-
-        item = ProductKnowledge.objects.create(
-            seller=seller,
-            product_id=product_id,
-            product_name=product_name,
-            question=question,
-            answer=answer,
-            is_active=bool(data.get("is_active", True)),
-        )
-
-        return JsonResponse({
-            "status": "success",
-            "message": "Knowledge Q&A berhasil ditambahkan.",
-            "knowledge": {
-                "id": item.id,
-                "product_id": item.product_id,
-                "product_name": item.product_name,
-                "question": item.question,
-                "answer": item.answer,
-                "is_active": item.is_active,
-            }
-        }, status=201)
-
-    return _json_error("Metode tidak didukung.", status=405)
-
-
-@login_required
-def seller_knowledge_detail_api(request, pk):
-    """
-    GET, PUT/PATCH, DELETE: Mengelola entri Q&A individual milik penjual.
-    """
-    item = get_object_or_404(ProductKnowledge, id=pk, seller=request.user)
-
-    if request.method == "GET":
-        return JsonResponse({
-            "status": "success",
-            "knowledge": {
-                "id": item.id,
-                "product_id": item.product_id,
-                "product_name": item.product_name,
-                "question": item.question,
-                "answer": item.answer,
-                "is_active": item.is_active,
-            }
-        })
-
-    elif request.method in ("PUT", "PATCH"):
-        try:
-            data = json.loads(request.body.decode("utf-8")) if request.body else {}
-        except json.JSONDecodeError:
-            return _json_error("Format JSON tidak valid.")
-
-        if "question" in data:
-            item.question = str(data["question"]).strip()
-        if "answer" in data:
-            item.answer = str(data["answer"]).strip()
-        if "product_name" in data:
-            item.product_name = str(data["product_name"]).strip()
-        if "is_active" in data:
-            item.is_active = bool(data["is_active"])
-
-        item.save()
-        return JsonResponse({
-            "status": "success",
-            "message": "Knowledge Q&A berhasil diperbarui.",
-            "knowledge": {
-                "id": item.id,
-                "product_id": item.product_id,
-                "product_name": item.product_name,
-                "question": item.question,
-                "answer": item.answer,
-                "is_active": item.is_active,
-            }
-        })
-
-    elif request.method == "DELETE":
-        item.delete()
-        return JsonResponse({
-            "status": "success",
-            "message": "Knowledge Q&A berhasil dihapus.",
-        })
-
-    return _json_error("Metode tidak didukung.", status=405)
-
-
-@login_required
-def seller_chat_settings_api(request):
     settings_obj = _get_seller_chat_settings(request.user)
 
     if request.method == "GET":
@@ -830,7 +813,139 @@ def seller_chat_settings_api(request):
 
 
 @login_required
+def seller_knowledge_list_create_api(request):
+    """
+    GET: Melihat daftar Q&A yang dimiliki penjual. Opsional filter `?product_id=...`
+    POST: Menambahkan Q&A baru per produk atau umum toko (product_id opsional).
+    """
+    seller = request.user
+
+    if request.method == "GET":
+        qs = ProductKnowledge.objects.filter(seller=seller)
+        product_id = request.GET.get("product_id")
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+
+        items = [
+            {
+                "id": k.id,
+                "product_id": k.product_id,
+                "product_name": k.product_name,
+                "question": k.question,
+                "answer": k.answer,
+                "is_active": k.is_active,
+                "created_at": k.created_at.isoformat(),
+                "updated_at": k.updated_at.isoformat(),
+            }
+            for k in qs
+        ]
+        return JsonResponse({"status": "success", "total": len(items), "knowledges": items})
+
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except json.JSONDecodeError:
+            return _json_error("Format JSON tidak valid.")
+
+        raw_pid = data.get("product_id")
+        product_id = str(raw_pid).strip() if raw_pid not in (None, "", "null") else None
+        product_name = str(data.get("product_name", "")).strip()
+        question = str(data.get("question", "")).strip()
+        answer = str(data.get("answer", "")).strip()
+
+        if not question or not answer:
+            return _json_error("question dan answer wajib diisi.")
+
+        item = ProductKnowledge.objects.create(
+            seller=seller,
+            product_id=product_id,
+            product_name=product_name,
+            question=question,
+            answer=answer,
+            is_active=bool(data.get("is_active", True)),
+        )
+
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil ditambahkan.",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        }, status=201)
+
+    return _json_error("Metode tidak didukung.", status=405)
+
+
+@login_required
+def seller_knowledge_detail_api(request, pk):
+    """
+    GET, PUT/PATCH, DELETE: Mengelola entri Q&A individual milik penjual.
+    """
+    item = get_object_or_404(ProductKnowledge, id=pk, seller=request.user)
+
+    if request.method == "GET":
+        return JsonResponse({
+            "status": "success",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        })
+
+    elif request.method in ("PUT", "PATCH"):
+        try:
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except json.JSONDecodeError:
+            return _json_error("Format JSON tidak valid.")
+
+        if "question" in data:
+            item.question = str(data["question"]).strip()
+        if "answer" in data:
+            item.answer = str(data["answer"]).strip()
+        if "product_name" in data:
+            item.product_name = str(data["product_name"]).strip()
+        if "product_id" in data:
+            raw_pid = data["product_id"]
+            item.product_id = str(raw_pid).strip() if raw_pid not in (None, "", "null") else None
+        if "is_active" in data:
+            item.is_active = bool(data["is_active"])
+
+        item.save()
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil diperbarui.",
+            "knowledge": {
+                "id": item.id,
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "question": item.question,
+                "answer": item.answer,
+                "is_active": item.is_active,
+            }
+        })
+
+    elif request.method == "DELETE":
+        item.delete()
+        return JsonResponse({
+            "status": "success",
+            "message": "Knowledge Q&A berhasil dihapus.",
+        })
+
+    return _json_error("Metode tidak didukung.", status=405)
+
+
+@login_required
 def seller_knowledge_toggle_api(request, pk):
+
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -846,6 +961,11 @@ def seller_knowledge_toggle_api(request, pk):
     })
 
 
+# ==============================================================================
+# RATING & REPORT API (POPOVER FIGMA)
+# ==============================================================================
+
+@login_required
 def submit_session_rating_api(request, session_id):
     """
     Payload: {"rating": 5, "feedback": "Penjual sangat ramah!"}
@@ -945,8 +1065,6 @@ def submit_user_report_api(request):
 # ==============================================================================
 
 @login_required
-
-
 def list_broadcast_channels_api(request):
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
@@ -981,7 +1099,7 @@ def get_broadcast_messages_api(request, channel_id):
 
     # Naikkan view count
     if request.user != channel.seller:
-        messages_qs.update(viewed_count=models.F('viewed_count') + 1)
+        messages_qs.update(viewed_count=F('viewed_count') + 1)
 
     messages = [
         {
