@@ -12,6 +12,10 @@ from apps.chat.models import (
     SessionProductContext,
     ChatMessage,
     SellerChatSettings,
+    SessionRating,
+    UserReport,
+    BroadcastChannel,
+    BroadcastMessage,
 )
 from apps.chat.services.ai_service import (
     build_system_prompt,
@@ -389,3 +393,190 @@ class ChatAPITest(TestCase):
         data = resp.json()
         self.assertTrue(data.get("is_closed"))
         self.assertIn("Toko sedang istirahat malam.", data["reply"])
+
+    def test_storewide_keywords_and_toggle(self):
+        self.client.login(username="seller@test.com", password="password123")
+        list_url = reverse("chat:seller_knowledge_list_create")
+
+        # 1. Create a store-wide keyword without product_id
+        create_resp = self.client.post(list_url, data=json.dumps({
+            "product_id": None,
+            "product_name": "",
+            "question": "Ongkir ke Jakarta berapa?",
+            "answer": "Gratis ongkir untuk pesanan di atas Rp100.000.",
+        }), content_type="application/json")
+        self.assertEqual(create_resp.status_code, 201)
+        kw_id = create_resp.json()["knowledge"]["id"]
+        kw = ProductKnowledge.objects.get(id=kw_id)
+        self.assertIsNone(kw.product_id)
+        self.assertTrue(kw.is_active)
+
+        # 2. Toggle active/inactive
+        toggle_url = reverse("chat:seller_knowledge_toggle", args=[kw_id])
+        t_resp1 = self.client.post(toggle_url)
+        self.assertEqual(t_resp1.status_code, 200)
+        self.assertFalse(t_resp1.json()["is_active"])
+
+        t_resp2 = self.client.post(toggle_url)
+        self.assertEqual(t_resp2.status_code, 200)
+        self.assertTrue(t_resp2.json()["is_active"])
+
+    def test_buyer_inbox_filtering_and_archive(self):
+        self.client.login(username="buyer@test.com", password="password123")
+
+        session1 = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        ChatMessage.objects.create(
+            session=session1,
+            sender=self.seller,
+            sender_type=ChatMessage.SENDER_SELLER,
+            content="Halo pembeli!",
+            is_read=False,
+        )
+
+        inbox_url = reverse("chat:buyer_inbox_sessions")
+
+        # 1. Tab Semua
+        resp = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()["sessions"]), 1)
+        self.assertEqual(resp.json()["sessions"][0]["unread_count"], 1)
+
+        # 2. Tab Belum Dibaca
+        resp_unread = self.client.get(f"{inbox_url}?tab=belum_dibaca")
+        self.assertEqual(resp_unread.status_code, 200)
+        self.assertEqual(len(resp_unread.json()["sessions"]), 1)
+
+        # 3. Toggle Archive
+        archive_url = reverse("chat:toggle_archive_session", args=[session1.id])
+        arc_resp = self.client.post(archive_url)
+        self.assertEqual(arc_resp.status_code, 200)
+        self.assertTrue(arc_resp.json()["is_archived"])
+
+        # 4. Tab Diarsipkan
+        resp_archived = self.client.get(f"{inbox_url}?tab=diarsipkan")
+        self.assertEqual(resp_archived.status_code, 200)
+        self.assertEqual(len(resp_archived.json()["sessions"]), 1)
+
+        # In Tab Semua, archived session is hidden
+        resp_semua_after = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(len(resp_semua_after.json()["sessions"]), 0)
+
+    def test_seller_inbox_unreplied_tab(self):
+        self.client.login(username="seller@test.com", password="password123")
+
+        session1 = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        ChatMessage.objects.create(
+            session=session1,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Kak mau tanya produk ini.",
+            is_read=False,
+        )
+
+        inbox_url = reverse("chat:seller_inbox_sessions")
+
+        # Tab belum_dibalas
+        resp = self.client.get(f"{inbox_url}?tab=belum_dibalas")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()["sessions"]), 1)
+
+        # Once seller replies, it leaves belum_dibalas
+        ChatMessage.objects.create(
+            session=session1,
+            sender=self.seller,
+            sender_type=ChatMessage.SENDER_SELLER,
+            content="Halo kak, ada yang bisa dibantu?",
+            is_read=True,
+        )
+        resp_after = self.client.get(f"{inbox_url}?tab=belum_dibalas")
+        self.assertEqual(len(resp_after.json()["sessions"]), 0)
+
+    def test_submit_session_rating_api(self):
+        session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        url = reverse("chat:submit_session_rating", args=[session.id])
+
+        # Seller cannot rate
+        self.client.login(username="seller@test.com", password="password123")
+        resp_fail = self.client.post(url, data=json.dumps({"rating": 5}), content_type="application/json")
+        self.assertEqual(resp_fail.status_code, 403)
+
+        # Buyer can rate
+        self.client.login(username="buyer@test.com", password="password123")
+        resp_success = self.client.post(url, data=json.dumps({
+            "rating": 5,
+            "feedback": "Pelayanan sangat cepat dan ramah!",
+        }), content_type="application/json")
+        self.assertEqual(resp_success.status_code, 200)
+        self.assertEqual(SessionRating.objects.get(session=session).rating, 5)
+
+        # Invalid rating
+        resp_invalid = self.client.post(url, data=json.dumps({"rating": 10}), content_type="application/json")
+        self.assertEqual(resp_invalid.status_code, 400)
+
+    def test_submit_user_report_api(self):
+        url = reverse("chat:submit_user_report")
+        self.client.login(username="seller@test.com", password="password123")
+
+        # Report self should fail
+        resp_self = self.client.post(url, data=json.dumps({
+            "reported_user_id": self.seller.id,
+            "reason": "Test",
+        }), content_type="application/json")
+        self.assertEqual(resp_self.status_code, 400)
+
+        # Report buyer succeeds
+        resp_success = self.client.post(url, data=json.dumps({
+            "reported_user_id": self.buyer.id,
+            "reason": "Pembeli menggunakan kata-kata kasar.",
+        }), content_type="application/json")
+        self.assertEqual(resp_success.status_code, 201)
+        report_id = resp_success.json()["report_id"]
+        self.assertEqual(UserReport.objects.get(id=report_id).reason, "Pembeli menggunakan kata-kata kasar.")
+
+    def test_broadcast_channel_apis(self):
+        # 1. Create channel
+        channel = BroadcastChannel.objects.create(
+            seller=self.seller,
+            name="Channel Toko Eucalyptus",
+            description="Informasi promo dan tips hidup ramah lingkungan",
+            followers_count=150,
+        )
+
+        # 2. List channels
+        self.client.login(username="buyer@test.com", password="password123")
+        list_url = reverse("chat:list_broadcast_channels")
+        resp_list = self.client.get(list_url)
+        self.assertEqual(resp_list.status_code, 200)
+        self.assertEqual(resp_list.json()["total"], 1)
+
+        # 3. Buyer cannot post to broadcast
+        send_url = reverse("chat:send_broadcast_message", args=[channel.id])
+        resp_forbidden = self.client.post(send_url, data=json.dumps({"content": "Promo palsu"}), content_type="application/json")
+        self.assertEqual(resp_forbidden.status_code, 403)
+
+        # 4. Seller posts broadcast message
+        self.client.login(username="seller@test.com", password="password123")
+        resp_send = self.client.post(send_url, data=json.dumps({"content": "Diskon 20% khusus hari ini!"}), content_type="application/json")
+        self.assertEqual(resp_send.status_code, 201)
+        self.assertEqual(channel.messages.count(), 1)
+
+        # 5. Buyer reads broadcast message and view count increments
+        self.client.login(username="buyer@test.com", password="password123")
+        msg_url = reverse("chat:get_broadcast_messages", args=[channel.id])
+        resp_msgs = self.client.get(msg_url)
+        self.assertEqual(resp_msgs.status_code, 200)
+        self.assertEqual(len(resp_msgs.json()["messages"]), 1)
+        self.assertEqual(BroadcastMessage.objects.first().viewed_count, 1)
+
