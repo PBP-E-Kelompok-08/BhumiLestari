@@ -235,6 +235,11 @@ class BroadcastChannel(models.Model):
     description = models.TextField(blank=True)
     followers_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    archived_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="archived_broadcast_channels",
+        blank=True
+    )
 
     def __str__(self):
         return self.name
