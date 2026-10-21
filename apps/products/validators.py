@@ -24,6 +24,7 @@ def validate_file_extension(file, allowed_extensions):
 def validate_file_content(file):
     if not isinstance(file, UploadedFile):
         return
+    
     file.seek(0)
     is_pdf = file.read(5) == b"%PDF-"
     file.seek(0)
