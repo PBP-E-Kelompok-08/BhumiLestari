@@ -8,7 +8,8 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=0)
     stock = models.PositiveIntegerField(default=0)
-    image = models.ImageField(upload_to="products/", blank=True)
+    image = models.ImageField(upload_to="products/images/")
+    certification = models.FileField(upload_to="products/certifications/")
 
     def __str__(self):
         return self.name
