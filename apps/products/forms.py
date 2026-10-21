@@ -5,12 +5,14 @@ from .validators import validate_file_size, validate_file_extension, validate_fi
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ["name", "description", "price", "stock", "image", "certification"]
+        fields = ["name", "description", "category", "stock", "price", "discount", "image", "certification"]
         labels = {
             "name": "Nama Produk",
-            "description": "Deskripsi",
-            "price": "Harga (Rp)",
+            "description": "Deskripsi Produk",
+            "category": "Kategori",
             "stock": "Stok",
+            "price": "Harga (Rp)",
+            "discount": "Diskon (Opsional)",
             "image": "Foto Produk",
             "certification": "Sertifikasi Eco-Friendly Produk",
         }
@@ -24,19 +26,26 @@ class ProductForm(forms.ModelForm):
             "description": forms.Textarea(
                 attrs={
                     "rows": 4,
-                    "placeholder": "Deskripsikan produk Anda",
-                }
-            ),
-            "price": forms.NumberInput(
-                attrs={
-                    "min": 0,
-                    "placeholder": "Contoh: 25000",
+                    "placeholder": "Masukkan deskripsi produk Anda",
                 }
             ),
             "stock": forms.NumberInput(
                 attrs={
                     "min": 0,
-                    "placeholder": "Contoh: 100",
+                    "placeholder": "0",
+                }
+            ),
+            "price": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "placeholder": "Rp. 0",
+                }
+            ),
+            "discount": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "max": 100,
+                    "placeholder": "0 %",
                 }
             ),
             "image": forms.FileInput(
@@ -58,9 +67,9 @@ class ProductForm(forms.ModelForm):
         return image
 
     def clean_certification(self):
-        cert = self.cleaned_data.get("certification")
-        if cert:
-            validate_file_size(cert)
-            validate_file_extension(cert, ["pdf", "jpg", "jpeg", "png"])
-            validate_file_content(cert)
-        return cert
+        certificate = self.cleaned_data.get("certification")
+        if certificate:
+            validate_file_size(certificate)
+            validate_file_extension(certificate, ["pdf", "jpg", "jpeg", "png"])
+            validate_file_content(certificate)
+        return certificate

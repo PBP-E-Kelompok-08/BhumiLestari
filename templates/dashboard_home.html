@@ -18,9 +18,9 @@
                 <option>Terbaru</option>
             </select>
 
-            {% if user.role == "seller" %}
-                <a href="#" class="dash-btn-seller">+ Tambah Produk</a>
-            {% endif %}
+        {% if user.role == "seller" %}
+            <a href="{% url 'products:add_product' %}" class="dash-btn-seller">+ Tambah Produk</a>
+        {% endif %}
         </div>
 
         <div class="dash-grid">
