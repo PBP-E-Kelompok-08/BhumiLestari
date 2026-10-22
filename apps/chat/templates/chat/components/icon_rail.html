@@ -1,0 +1,66 @@
+<nav class="chat-icon-rail" aria-label="Navigasi Utama Chat">
+    {% if user.role == "seller" or is_seller_mode %}
+        <a href="{% url 'chat:seller_chat' %}"
+           class="chat-rail-link {% if active_nav == 'chat' %}active{% endif %}"
+           title="Chat Pembeli"
+           aria-label="Chat Pembeli">
+            <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 7h19v13H11l-6 5V7z"/>
+                <path d="M10 12h9M10 15.5h6"/>
+                <path d="M15 23v4h10l6 5V16h-4"/>
+            </svg>
+        </a>
+    {% else %}
+        <a href="{% url 'chat:buyer_chat' %}"
+           class="chat-rail-link {% if active_nav == 'chat' %}active{% endif %}"
+           title="Chat Penjual"
+           aria-label="Chat Penjual">
+            <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 7h19v13H11l-6 5V7z"/>
+                <path d="M10 12h9M10 15.5h6"/>
+                <path d="M15 23v4h10l6 5V16h-4"/>
+            </svg>
+        </a>
+    {% endif %}
+
+    <a href="{% url 'chat:broadcast' %}"
+       class="chat-rail-link {% if active_nav == 'broadcast' %}active{% endif %}"
+       title="Saluran Broadcast"
+       aria-label="Saluran Broadcast">
+        <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M24 8L11 14H6v8h5l13 6V8z"/>
+            <path d="M9 22l2 7h3l-1.5-7"/>
+            <path d="M28 14c1.5 1.2 1.5 6.8 0 8"/>
+            <path d="M31 11c2.5 2.5 2.5 11.5 0 14"/>
+        </svg>
+    </a>
+
+    {% if user.role == "seller" or is_seller_mode %}
+        <a href="{% url 'chat:seller_settings' %}"
+           class="chat-rail-link {% if active_nav == 'settings' %}active{% endif %}"
+           title="Manajemen Bot & Kata Kunci"
+           aria-label="Manajemen Bot & Kata Kunci">
+            <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="18" cy="6" r="2"/>
+                <path d="M18 8v4"/>
+                <rect x="7" y="12" width="22" height="17" rx="4"/>
+                <circle cx="13.5" cy="19.5" r="2"/>
+                <circle cx="22.5" cy="19.5" r="2"/>
+                <path d="M13 25h10"/>
+                <path d="M4 18h3M29 18h3"/>
+            </svg>
+        </a>
+    {% endif %}
+
+    <div class="chat-rail-spacer"></div>
+
+    <a href="{% url 'dashboard:show_dashboard_home' %}"
+       class="chat-rail-link chat-rail-home"
+       title="Kembali ke Katalog BhumiLestari"
+       aria-label="Kembali ke Katalog BhumiLestari">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/>
+        </svg>
+    </a>
+</nav>
+
