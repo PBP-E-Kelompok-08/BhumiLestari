@@ -4,7 +4,7 @@
 
 .add-product {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem 1.5rem;
 }
 
@@ -15,24 +15,65 @@
 }
 
 .field-category,
-.field-price,
-.field-final {
+.field-eco_features,
+.field-image {
     grid-column: 1;
 }
 
+.field-materials,
+.field-origin,
 .field-stock,
-.field-discount {
+.field-price,
+.field-discount,
+.field-final,
+.field-verification_document {
     grid-column: 2;
 }
 
-.field-image {
-    grid-column: 3;
-    grid-row: 1/3;
+.field-category { 
+    grid-row: 3; 
 }
 
-.field-certification {
-    grid-column: 3;
-    grid-row: 3/5;
+.field-eco_features { 
+    grid-row: 4/9; 
+}
+
+.field-image { 
+    grid-row: 9; 
+}
+
+.field-materials { 
+    grid-row: 3; 
+}
+
+.field-origin { 
+    grid-row: 4; 
+}
+
+.field-stock { 
+    grid-row: 5; 
+}
+
+.field-price { 
+    grid-row: 6; 
+}
+
+.field-discount { 
+    grid-row: 7; 
+}
+
+.field-final { 
+    grid-row: 8; 
+}
+
+.field-verification_document { 
+    grid-row: 9; 
+}
+
+.form-buttons {
+    grid-row: 10;
+    display: flex;
+    gap: 1rem;
 }
 
 .field label {
@@ -58,19 +99,31 @@
     border-color: var(--ink);
 }
 
-.field-image input,
-.field-certification input {
-    height: 9rem;
-    background: #ffff;
-}
-
 .field-final input {
     background: #d9d9d9;
 }
 
-.form-buttons {
+.field-eco_features {
     display: flex;
-    gap: 1rem;
+    flex-direction: column;
+}
+
+.field-eco_features > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: white;
+    padding: 0.8rem;
+}
+
+.field-eco_features div label {
+    font-weight: 400;
+}
+
+.field-eco_features input {
+    width: auto;
+    margin-right: 0.4rem;
 }
 
 .btn-save,
