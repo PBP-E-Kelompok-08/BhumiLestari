@@ -85,8 +85,7 @@
             </button>
 
             <ul class="sidebar-popup" hidden>
-                <li><a href="#">Pengaturan Akun</a></li>
-                <li>
+                <li><a href="{% url 'users:account_settings' %}">Pengaturan Akun</a></li>
                     <form method="post" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button type="submit" style="color:red">Keluar</button>

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+    <title>Pengaturan Akun - Bhumi Lestari</title>
+    <link rel="stylesheet" href="{% static 'css/account_settings.css' %}">
+{% endblock meta %}
+
+{% block content %}
+<main class="settings">
+    <h1>Pengaturan Akun</h1>
+
+    <div class="settings-card-left">
+        <section class="settings-card">
+            <h2>Informasi Akun</h2>
+
+            <form method="post" action="#" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="logo-row">
+                    <img class="logo" src="{% static 'img/user.png' %}" alt="Logo akun">
+                    <label class="button" for="logo">+ Ganti Logo Akun</label>
+                    <input type="file" id="logo" name="logo">
+                </div>
+
+                <label for="store_name">Nama Akun</label>
+                <input type="text" id="store_name" name="store_name">
+
+                <label for="email">Email Akun</label>
+                <input type="email" id="email" name="email">
+
+                <label for="phone">Nomor Telepon</label>
+                <input type="tel" id="phone" name="phone">
+
+                <label for="address">Alamat</label>
+                <input type="text" id="address" name="address">
+
+                <button type="submit">Simpan Perubahan</button>
+            </form>
+        </section>
+
+        <div class="settings-card-right">
+            <section class="settings-card">
+                <h2>Ganti Password</h2>
+
+                <form method="post" action="#">
+                    {% csrf_token %}
+
+                    <label for="old_password">Password Lama</label>
+                    <input type="password" id="old_password" name="old_password">
+
+                    <label for="new_password">Password Baru</label>
+                    <input type="password" id="new_password" name="new_password">
+
+                    <label for="confirm_password">Konfirmasi Password Baru</label>
+                    <input type="password" id="confirm_password" name="confirm_password">
+
+                    <button type="submit">Perbarui Password</button>
+                </form>
+            </section>
+
+            <section class="settings-card">
+                <h2>Pembayaran</h2>
+
+                <div class="payment-method">
+                    <input type="text" name="bank_name"> 
+                    {% comment %} Ini nanti dibuat dropdown juga boleh Dhil {% endcomment %}
+                    <input type="text" name="account_number">
+                </div>
+
+                <button type="submit">+ Tambah Metode Pembayaran</button>
+            </section>
+        </div>
+    </div>
+</main>
+{% endblock content %}

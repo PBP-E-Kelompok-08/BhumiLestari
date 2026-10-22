@@ -1,0 +1,81 @@
+.settings {
+    padding: 1.5rem;
+}
+
+.settings-card-left {
+    display: flex;
+    gap: 1rem;
+}
+
+.settings-card-right {
+    flex: 1;
+}
+
+.settings-card {
+    flex: 1;
+    background: #FFFF;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.settings-card label {
+    display: block;
+    margin-top: 0.8rem;
+}
+
+.settings-card input {
+    width: 100%;
+    padding: 0.5rem;
+    border: none;
+    background: #f1f1f1;
+}
+
+.settings-card button {
+    margin-top: 1rem;
+    padding: 0.6rem 1rem;
+    border: none;
+    background: var(--ink);
+    color: #FFFF;
+    cursor: pointer;
+    font-family: "Prompt";
+    font-size: 0.9rem;
+}
+
+.logo-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo-row .logo {
+    width: 5rem;
+    height: 5rem;
+    border-radius: 50%;
+}
+
+.logo-row .button {
+    padding: 0.6rem 1rem;
+    background: var(--secondpaper);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.logo-row input {
+    display: none;
+}
+
+.payment-method {
+    display: flex;
+    gap: 0.5rem;
+}
+
+@media (max-width: 800px) {
+    .settings-card-left {
+        flex-direction: column;
+    }
+
+    .settings-card-left {
+        gap: 0;
+    }
+}
