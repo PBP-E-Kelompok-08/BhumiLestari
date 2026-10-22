@@ -894,8 +894,9 @@ body.chat-page-body {
 .chat-composer-input:focus,
 .chat-composer-input:focus-visible,
 .chat-composer-input:active {
-    outline: 2px solid #000000;
-    border: none;
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .chat-composer-form:focus-within {
