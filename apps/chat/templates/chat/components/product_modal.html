@@ -1,0 +1,59 @@
+<!-- Modal Mulai Chat Toko / Tambah Konteks Produk -->
+<!-- Product Context Modal Dialog -->
+<div id="productContextModalBackdrop" class="chat-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="productModalTitle" hidden>
+    <div class="chat-modal-dialog">
+        <button type="button" class="chat-modal-close" id="closeProductModalBtn" aria-label="Tutup dialog produk">&times;</button>
+        <h2 id="productModalTitle" class="chat-modal-title">Tanya Produk &amp; Toko</h2>
+
+        <form id="productContextModalForm">
+            <!-- Hidden inputs to preserve submission contract -->
+            <input type="hidden" id="modalSellerSelect" name="seller_id" value="">
+            <input type="hidden" id="modalProductIdInput" name="product_id" value="">
+            <input type="hidden" id="modalProductNameInput" name="product_name" value="">
+
+            <!-- BAGIAN PILIH TOKO DENGAN SEARCH & DROPDOWN -->
+            <div id="sellerSelectWrap" class="chat-search-wrap">
+                <label for="sellerSearchInput" class="chat-modal-label" style="font-size: 22px;">Pilih Toko Penjual:</label>
+                <div class="chat-search-input-box">
+                    <input type="text"
+                           id="sellerSearchInput"
+                           class="chat-modal-select chat-searchable-input"
+                           placeholder="Ketik untuk cari atau klik untuk lihat toko..."
+                           autocomplete="off">
+                    <button type="button" id="clearSellerBtn" class="chat-search-clear-btn" title="Hapus pilihan toko" hidden>&times;</button>
+                </div>
+                <!-- Dropdown List Toko (AJAX Debounce / Random Toko) -->
+                <div id="sellerDropdownList" class="chat-search-dropdown-menu" aria-label="Daftar Toko">
+                    <div id="sellerDropdownLoading" class="chat-search-dropdown-loading" hidden>Memuat toko...</div>
+                    <ul id="sellerDropdownItems" class="chat-search-dropdown-list" role="listbox"></ul>
+                </div>
+            </div>
+
+            <!-- BAGIAN PRODUK TERKAIT (HIDDEN SAAT TOKO BELUM DIPILIH) -->
+            <div id="productSelectWrap" class="chat-search-wrap" hidden>
+                <label for="productSearchInput" class="chat-modal-label" style="font-size: 22px;">Produk Terkait (Opsional):</label>
+                <div class="chat-search-input-box">
+                    <input type="text"
+                           id="productSearchInput"
+                           class="chat-modal-select chat-searchable-input"
+                           placeholder="Ketik untuk cari produk di toko ini..."
+                           autocomplete="off">
+                    <button type="button" id="clearProductBtn" class="chat-search-clear-btn" title="Hapus pilihan produk" hidden>&times;</button>
+                </div>
+                <!-- Dropdown List Produk (AJAX Debounce / Random Produk Toko) -->
+                <div id="productDropdownList" class="chat-search-dropdown-menu" aria-label="Daftar Produk">
+                    <div id="productDropdownLoading" class="chat-search-dropdown-loading" hidden>Memuat produk...</div>
+                    <ul id="productDropdownItems" class="chat-search-dropdown-list" role="listbox"></ul>
+                </div>
+                <!-- Chip Produk Terpilih (tetap di DOM untuk kompatibilitas script) -->
+                <div id="selectedProductChip" class="chat-selected-product-chip" style="display: none !important;" hidden>
+                    <span class="chat-chip-label">Produk Terpilih:</span>
+                    <span id="selectedProductNameText" class="chat-chip-name"></span>
+                </div>
+            </div>
+
+            <button type="submit" id="submitProductModalBtn" class="chat-modal-submit-btn">Mulai / Lampirkan Produk</button>
+        </form>
+    </div>
+</div>
+
