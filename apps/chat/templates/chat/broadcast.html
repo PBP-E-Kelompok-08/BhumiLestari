@@ -1,0 +1,97 @@
+{% extends "chat/chat_base.html" %}
+{% load static %}
+
+{% block title %}Saluran Broadcast - BhumiLestari{% endblock title %}
+
+{% block left_panel_content %}
+<form id="broadcastSearchForm" class="chat-search-row" role="search">
+    <input type="search"
+           id="broadcastSearchInput"
+           class="chat-search-input"
+           placeholder="Cari pesan Anda di sini"
+           aria-label="Cari saluran siaran di sini">
+    <button type="submit" class="chat-search-btn">Search</button>
+</form>
+
+<div class="chat-filter-tabs" role="tablist" aria-label="Filter Saluran Broadcast">
+    <button type="button" class="chat-tab-pill active" role="tab" aria-selected="true" data-tab="semua">Semua</button>
+    <button type="button" class="chat-tab-pill" role="tab" aria-selected="false" data-tab="belum_dibaca">Belum dibaca</button>
+    <button type="button" class="chat-tab-pill" role="tab" aria-selected="false" data-tab="diarsipkan">Diarsipkan</button>
+</div>
+
+<ul id="broadcastChannelList" class="chat-session-list" aria-label="Daftar Saluran Broadcast">
+    <li class="chat-sidebar-empty">Memuat saluran broadcast...</li>
+</ul>
+{% endblock left_panel_content %}
+
+{% block main_area_content %}
+<header class="chat-main-header">
+    <div class="chat-header-left">
+        <button type="button" id="mobileBackToListBtn" class="chat-mobile-menu-btn" aria-label="Tampilkan daftar channel">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </button>
+        <div class="chat-avatar-circle" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="24" fill="#D8D4D5"/>
+                <circle cx="24" cy="18" r="7.5" fill="#706869"/>
+                <path d="M10 42c0-7.7 6.3-13 14-13s14 5.3 14 13" fill="#706869"/>
+            </svg>
+        </div>
+        <div class="chat-header-info">
+            <h1 id="activeChannelTitle" class="chat-header-title">Pilih Saluran Broadcast</h1>
+            <p id="activeChannelFollowers" class="chat-header-subtitle">0 followers</p>
+        </div>
+    </div>
+
+    <div class="chat-header-actions">
+        <button type="button"
+                id="broadcastHeaderMenuBtn"
+                class="chat-header-icon-btn"
+                title="Menu Channel"
+                aria-label="Menu Channel"
+                aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="2.2"/>
+                <circle cx="12" cy="12" r="2.2"/>
+                <circle cx="12" cy="19" r="2.2"/>
+            </svg>
+        </button>
+
+        <div id="broadcastHeaderDropdownMenu" class="chat-header-dropdown" hidden>
+            <button type="button" id="broadcastDropdownArchiveBtn" class="chat-dropdown-item">Arsipkan / Buka Arsip Channel</button>
+        </div>
+    </div>
+</header>
+
+<section id="broadcastMainBody" class="chat-main-body" aria-live="polite">
+    <div class="chat-date-divider">
+        <span class="chat-date-pill">Hari Ini</span>
+    </div>
+
+    <div id="broadcastMessagesContainer" class="chat-messages-container">
+        <div class="chat-state-box">
+            <h2 class="chat-state-title">Pilih Saluran Siaran</h2>
+            <p class="chat-state-desc">Lihat pengumuman promo terbaru dan kode referral dari toko pilihan Anda.</p>
+        </div>
+    </div>
+</section>
+
+<footer id="broadcastComposerFooter" class="chat-bottom-bar">
+    <form id="broadcastComposerForm" class="chat-composer-form" style="display: flex; width: 100%; gap: 8px;">
+        <input type="text" id="broadcastInput" class="chat-composer-input" placeholder="Tulis pesan siaran toko...">
+        <button type="button" id="sendBroadcastBtn" class="chat-send-btn">Kirim</button>
+    </form>
+</footer>
+{% endblock main_area_content %}
+
+{% block scripts %}
+<script>
+    window.BROADCAST_CONFIG = {
+        isSellerMode: {{ is_seller_mode|yesno:"true,false" }}
+    };
+</script>
+<script src="{% static 'chat/js/broadcast.js' %}"></script>
+{% endblock scripts %}
+
