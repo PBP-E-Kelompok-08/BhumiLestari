@@ -819,4 +819,102 @@ class ChatAPITest(TestCase):
         self.assertEqual(len(data_search["products"]), 1)
         self.assertEqual(data_search["products"][0]["product_name"], "Sabun Cuci Piring Herbal")
 
-    # Additional AI switching tests will follow
+    def test_switch_to_ai_session_preserves_history(self):
+        self.client.login(username="buyer@test.com", password="password123")
+
+        # 1. Buat direct session aktif
+        direct_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+            status=ChatSession.STATUS_ACTIVE,
+        )
+        msg_buyer = ChatMessage.objects.create(
+            session=direct_session,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Halo penjual, apakah harga masih bisa nego?",
+            is_read=True,
+        )
+        msg_seller = ChatMessage.objects.create(
+            session=direct_session,
+            sender=self.seller,
+            sender_type=ChatMessage.SENDER_SELLER,
+            content="Halo, mohon maaf harga kami sudah pas ya.",
+            is_read=True,
+        )
+
+        # 2. Panggil switch-to-ai
+        switch_url = reverse("chat:switch_to_ai_session", args=[direct_session.id])
+        resp = self.client.post(switch_url)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["session_type"], ChatSession.TYPE_AI)
+        ai_session_id = data["ai_session_id"]
+
+        # 3. Verifikasi status direct_session menjadi resolved
+        direct_session.refresh_from_db()
+        self.assertEqual(direct_session.status, ChatSession.STATUS_RESOLVED)
+
+        # 4. Verifikasi sesi AI baru aktif dan memuat semua riwayat chat direct
+        ai_session = ChatSession.objects.get(id=ai_session_id)
+        self.assertEqual(ai_session.status, ChatSession.STATUS_ACTIVE)
+        self.assertEqual(ai_session.session_type, ChatSession.TYPE_AI)
+
+        ai_msg_contents = list(ai_session.messages.values_list("content", flat=True))
+        self.assertIn("Halo penjual, apakah harga masih bisa nego?", ai_msg_contents)
+        self.assertIn("Halo, mohon maaf harga kami sudah pas ya.", ai_msg_contents)
+        self.assertTrue(any("--- Anda kini beralih kembali ke Asisten AI" in c for c in ai_msg_contents))
+
+        # 5. Verifikasi inbox sessions pembeli menampilkan 1 entri (deduplikasi per toko)
+        inbox_url = reverse("chat:buyer_inbox_sessions")
+        inbox_resp = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(inbox_resp.status_code, 200)
+        inbox_data = inbox_resp.json()
+        self.assertEqual(inbox_data["total_sessions"], 1)
+        self.assertEqual(inbox_data["sessions"][0]["id"], str(ai_session.id))
+        self.assertEqual(inbox_data["sessions"][0]["session_type"], ChatSession.TYPE_AI)
+
+    def test_get_or_create_ai_session_always_starts_ai_even_with_prior_direct(self):
+        self.client.login(username="buyer@test.com", password="password123")
+
+        # Buat direct session aktif sebelumnya
+        direct_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+            status=ChatSession.STATUS_ACTIVE,
+        )
+        ChatMessage.objects.create(
+            session=direct_session,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Permisi mau tanya stok sabun.",
+            is_read=True,
+        )
+
+        # Buyer membuka modal Tanya Produk & Toko dan memilih seller ini
+        url = reverse("chat:get_or_create_ai_session")
+        resp = self.client.post(
+            url,
+            data=json.dumps({"seller_id": self.seller.id, "products": [{"product_id": "PRD-99", "product_name": "Sabun Alami"}]}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["session_type"], ChatSession.TYPE_AI)
+
+        # Direct session lama sudah resolved dan beralih ke sesi AI
+        direct_session.refresh_from_db()
+        self.assertEqual(direct_session.status, ChatSession.STATUS_RESOLVED)
+
+        # Riwayat tetap tersimpan di sesi AI
+        ai_session = ChatSession.objects.get(id=data["session_id"])
+        self.assertTrue(ai_session.messages.filter(content="Permisi mau tanya stok sabun.").exists())
+        self.assertEqual(ai_session.product_contexts.count(), 1)
+
+
+
+
