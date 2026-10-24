@@ -196,6 +196,37 @@ class ChatAPITest(TestCase):
         add_data = add_resp.json()
         self.assertEqual(len(add_data["all_product_contexts"]), 3)
 
+        # 1. Hapus konteks produk tunggal via DELETE ?product_id=P2
+        del_resp = self.client.delete(f"{add_product_url}?product_id=P2")
+        self.assertEqual(del_resp.status_code, 200)
+        del_data = del_resp.json()
+        self.assertEqual(del_data["status"], "success")
+        self.assertEqual(len(del_data["all_product_contexts"]), 2)
+        remaining_ids = [c["product_id"] for c in del_data["all_product_contexts"]]
+        self.assertNotIn("P2", remaining_ids)
+        self.assertIn("P1", remaining_ids)
+        self.assertIn("P3", remaining_ids)
+
+        # 2. Hapus konteks produk via POST /products/delete/
+        delete_url = reverse("chat:delete_product_context", args=[session_id])
+        del_p3_resp = self.client.post(
+            delete_url,
+            data=json.dumps({"product_id": "P3"}),
+            content_type="application/json"
+        )
+        self.assertEqual(del_p3_resp.status_code, 200)
+        self.assertEqual(len(del_p3_resp.json()["all_product_contexts"]), 1)
+
+        # 3. Hapus semua konteks produk via POST /products/delete/ with {"all": True}
+        del_all_resp = self.client.post(
+            delete_url,
+            data=json.dumps({"all": True}),
+            content_type="application/json"
+        )
+        self.assertEqual(del_all_resp.status_code, 200)
+        self.assertEqual(len(del_all_resp.json()["all_product_contexts"]), 0)
+        self.assertEqual(SessionProductContext.objects.filter(session_id=session_id).count(), 0)
+
     @patch("apps.chat.views.query_openrouter")
     def test_send_ai_message_answered(self, mock_ai):
         mock_ai.return_value = "Ya, bisa dicuci dan dipakai berulang kali."
@@ -465,6 +496,70 @@ class ChatAPITest(TestCase):
         resp_semua_after = self.client.get(f"{inbox_url}?tab=semua")
         self.assertEqual(len(resp_semua_after.json()["sessions"]), 0)
 
+    def test_buyer_inbox_no_duplicate_stores_after_escalation(self):
+        self.client.login(username="buyer@test.com", password="password123")
+        inbox_url = reverse("chat:buyer_inbox_sessions")
+
+        # 1. Mulai sesi AI awal
+        ai_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+            status=ChatSession.STATUS_ACTIVE,
+        )
+        ChatMessage.objects.create(
+            session=ai_session,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Tanya produk ke bot"
+        )
+
+        resp1 = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(len(resp1.json()["sessions"]), 1)
+        self.assertEqual(resp1.json()["sessions"][0]["id"], str(ai_session.id))
+
+        # 2. Eskalasi / beralih dari mode chat AI ke penjual langsung
+        escalate_url = reverse("chat:escalate_to_seller", args=[ai_session.id])
+        esc_resp = self.client.post(escalate_url)
+        self.assertEqual(esc_resp.status_code, 200)
+        direct_session_id = esc_resp.json()["direct_session_id"]
+
+        # 3. Cek inbox pembeli: Toko TIDAK boleh duplikat (harus tepat 1 sesi, yaitu sesi direct)
+        resp2 = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(resp2.status_code, 200)
+        sessions = resp2.json()["sessions"]
+        self.assertEqual(len(sessions), 1, "Daftar toko di inbox tidak boleh duplikat setelah eskalasi")
+        self.assertEqual(sessions[0]["id"], direct_session_id)
+        self.assertEqual(sessions[0]["session_type"], ChatSession.TYPE_DIRECT)
+
+        # 3b. Ketika pembeli melihat isi chat direct, unread_count harus 0 (badge notifikasi hilang)
+        msg_url = reverse("chat:get_session_messages", args=[direct_session_id])
+        msg_resp = self.client.get(msg_url)
+        self.assertEqual(msg_resp.status_code, 200)
+
+        resp_badge_check = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(resp_badge_check.json()["sessions"][0]["unread_count"], 0)
+        resp_tab_unread = self.client.get(f"{inbox_url}?tab=belum_dibaca")
+        self.assertEqual(len(resp_tab_unread.json()["sessions"]), 0)
+
+        # 4. Jika pembeli membuka 'Tanya Produk & Toko' dengan seller yang sama,
+        # sesi beralih kembali ke AI session dengan riwayat tersimpan (sesuai permintaan user: selalu dimulai dengan AI chatbot)
+        create_url = reverse("chat:get_or_create_ai_session")
+        create_resp = self.client.post(
+            create_url,
+            data=json.dumps({"seller_id": self.seller.id, "products": []}),
+            content_type="application/json"
+        )
+        self.assertEqual(create_resp.status_code, 200)
+        self.assertEqual(create_resp.json()["session_type"], ChatSession.TYPE_AI)
+        new_ai_session_id = create_resp.json()["session_id"]
+
+        # 5. Tetap tidak ada duplikasi toko di inbox pembeli
+        resp3 = self.client.get(f"{inbox_url}?tab=semua")
+        self.assertEqual(len(resp3.json()["sessions"]), 1)
+        self.assertEqual(resp3.json()["sessions"][0]["id"], new_ai_session_id)
+
     def test_seller_inbox_unreplied_tab(self):
         self.client.login(username="seller@test.com", password="password123")
 
@@ -580,3 +675,148 @@ class ChatAPITest(TestCase):
         self.assertEqual(len(resp_msgs.json()["messages"]), 1)
         self.assertEqual(BroadcastMessage.objects.first().viewed_count, 1)
 
+    def test_frontend_chat_pages_render(self):
+        # 1. Buyer Chat Page (Screen 1, Screen 7, Screen 8)
+        self.client.login(username="buyer@test.com", password="password123")
+        resp_buyer = self.client.get(reverse("chat:buyer_chat"))
+        self.assertEqual(resp_buyer.status_code, 200)
+        self.assertContains(resp_buyer, "BhumiLestari")
+        self.assertContains(resp_buyer, "Ratingmu terhadap percakapan tadi")
+        self.assertContains(resp_buyer, "Laporkan Pengguna Ini")
+
+        # 2. Seller Chat Page (Screen 2 & Screen 8)
+        self.client.login(username="seller@test.com", password="password123")
+        resp_seller = self.client.get(reverse("chat:seller_chat"))
+        self.assertEqual(resp_seller.status_code, 200)
+        self.assertContains(resp_seller, "Belum dibalas")
+        self.assertContains(resp_seller, "Laporkan Pengguna Ini")
+
+        # 3. Seller Welcome Settings Page (Screen 3)
+        resp_settings = self.client.get(reverse("chat:seller_settings"))
+        self.assertEqual(resp_settings.status_code, 200)
+        self.assertContains(resp_settings, "Pengaturan Sambutan")
+        self.assertContains(resp_settings, "Beri Nama Botmu")
+        self.assertContains(resp_settings, "Jam Operasional Toko")
+        self.assertContains(resp_settings, "Pesan Saat Toko Tutup")
+
+        # 4. Seller Keywords Page (Screen 4)
+        ProductKnowledge.objects.create(
+            seller=self.seller,
+            question="Ongkir",
+            answer="Ongkir dihitung saat checkout kak!",
+            is_active=True,
+        )
+        resp_keywords = self.client.get(reverse("chat:seller_keywords"))
+        self.assertEqual(resp_keywords.status_code, 200)
+        self.assertContains(resp_keywords, "Balasan Kata Kunci")
+        self.assertContains(resp_keywords, "Ongkir dihitung saat checkout kak!")
+        self.assertContains(resp_keywords, "Tambah balasan")
+
+        # 5. Broadcast Page (Screen 5 & Screen 6)
+        resp_broadcast = self.client.get(reverse("chat:broadcast"))
+        self.assertEqual(resp_broadcast.status_code, 200)
+        self.assertContains(resp_broadcast, "Anda tidak punya akses untuk mengirim pesan pada channel ini")
+        self.assertTrue(BroadcastChannel.objects.filter(seller=self.seller).exists())
+
+    def test_broadcast_channel_archive_and_tabs(self):
+        channel = BroadcastChannel.objects.create(
+            seller=self.seller,
+            name="Channel Toko Lestari",
+            followers_count=100,
+        )
+
+        self.client.login(username="buyer@test.com", password="password123")
+        archive_url = reverse("chat:toggle_archive_broadcast_channel", args=[channel.id])
+        list_url = reverse("chat:list_broadcast_channels")
+
+        # 1. Archive channel
+        arc_resp = self.client.post(archive_url)
+        self.assertEqual(arc_resp.status_code, 200)
+        self.assertTrue(arc_resp.json()["is_archived"])
+
+        # 2. Check tab diarsipkan
+        resp_diarsipkan = self.client.get(f"{list_url}?tab=diarsipkan")
+        self.assertEqual(resp_diarsipkan.status_code, 200)
+        self.assertEqual(len(resp_diarsipkan.json()["channels"]), 1)
+        self.assertEqual(resp_diarsipkan.json()["channels"][0]["id"], channel.id)
+
+        # 3. Check tab semua (archived is excluded)
+        resp_semua = self.client.get(f"{list_url}?tab=semua")
+        self.assertEqual(resp_semua.status_code, 200)
+        self.assertEqual(len(resp_semua.json()["channels"]), 0)
+
+        # 4. Unarchive channel
+        unarc_resp = self.client.post(archive_url)
+        self.assertEqual(unarc_resp.status_code, 200)
+        self.assertFalse(unarc_resp.json()["is_archived"])
+
+        resp_semua_after = self.client.get(f"{list_url}?tab=semua")
+        self.assertEqual(len(resp_semua_after.json()["channels"]), 1)
+
+    def test_search_sellers_api_debounce_and_random(self):
+        self.client.login(username="buyer@test.com", password="password123")
+        url = reverse("chat:search_sellers")
+
+        from apps.users.models import SellerProfile
+        seller_profile, _ = SellerProfile.objects.get_or_create(user=self.seller, defaults={"store_name": "Toko Lestari"})
+
+        # 1. Query kosong: harus return toko random
+        resp_empty = self.client.get(url)
+        self.assertEqual(resp_empty.status_code, 200)
+        data_empty = resp_empty.json()
+        self.assertEqual(data_empty["status"], "success")
+        self.assertGreaterEqual(len(data_empty["sellers"]), 1)
+
+        # 2. Query kata kunci toko yang cocok
+        store_keyword = seller_profile.store_name[:4]
+        resp_q = self.client.get(f"{url}?q={store_keyword}")
+        self.assertEqual(resp_q.status_code, 200)
+        data_q = resp_q.json()
+        self.assertEqual(data_q["status"], "success")
+        self.assertTrue(any(s["id"] == self.seller.id for s in data_q["sellers"]))
+
+        # 3. Query kata kunci toko yang tidak ada
+        resp_none = self.client.get(f"{url}?q=tidak_ada_toko_xyz123")
+        self.assertEqual(resp_none.status_code, 200)
+        self.assertEqual(len(resp_none.json()["sellers"]), 0)
+
+    def test_search_products_api_filtered_by_seller(self):
+        self.client.login(username="buyer@test.com", password="password123")
+        url = reverse("chat:search_products")
+
+        # 1. Tanpa seller_id: harus error 400
+        resp_bad = self.client.get(url)
+        self.assertEqual(resp_bad.status_code, 400)
+
+        # 2. Buat produk untuk seller ini
+        from apps.users.models import SellerProfile
+        from apps.products.models import Product
+        seller_profile, _ = SellerProfile.objects.get_or_create(user=self.seller, defaults={"store_name": "Toko Lestari"})
+        p1 = Product.objects.create(
+            seller=seller_profile,
+            name="Sabun Cuci Piring Herbal",
+            price=15000,
+            stock=10
+        )
+        p2 = Product.objects.create(
+            seller=seller_profile,
+            name="Sikat Gigi Kayu Cendana",
+            price=20000,
+            stock=5
+        )
+
+        # Query produk toko tanpa keyword: return semua produk/random toko ini
+        resp_all = self.client.get(f"{url}?seller_id={self.seller.id}")
+        self.assertEqual(resp_all.status_code, 200)
+        data_all = resp_all.json()
+        self.assertEqual(data_all["status"], "success")
+        self.assertEqual(len(data_all["products"]), 2)
+
+        # Query produk dengan keyword: filter sesuai nama produk
+        resp_search = self.client.get(f"{url}?seller_id={self.seller.id}&q=sabun")
+        self.assertEqual(resp_search.status_code, 200)
+        data_search = resp_search.json()
+        self.assertEqual(len(data_search["products"]), 1)
+        self.assertEqual(data_search["products"][0]["product_name"], "Sabun Cuci Piring Herbal")
+
+    # Additional AI switching tests will follow
