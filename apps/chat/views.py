@@ -1678,7 +1678,3 @@ def broadcast_view(request):
     }
     return render(request, "chat/broadcast.html", context)
 
-
-# Fix: ensure single active card per store in buyer inbox
-
-# Fix: exclude forward_msg_id from history copy loop to prevent duplicate handover message
