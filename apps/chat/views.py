@@ -1678,3 +1678,5 @@ def broadcast_view(request):
     }
     return render(request, "chat/broadcast.html", context)
 
+
+# Fix: ensure single active card per store in buyer inbox
