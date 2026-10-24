@@ -220,7 +220,7 @@
     async function removeProductContext(productId, productName) {
         if (!state.activeSessionId) return;
         try {
-            var url = "/chat/api/sessions/" + state.activeSessionId + "/products/";
+            var url = "/chat/api/sessions/" + state.activeSessionId + "/products/delete/";
             var res = await ChatCore.apiFetch(url, {
                 method: "POST",
                 body: { product_id: productId }
@@ -246,7 +246,7 @@
     async function clearAllProductContexts() {
         if (!state.activeSessionId) return;
         try {
-            var url = "/chat/api/sessions/" + state.activeSessionId + "/products/";
+            var url = "/chat/api/sessions/" + state.activeSessionId + "/products/delete/";
             await ChatCore.apiFetch(url, {
                 method: "POST",
                 body: { all: true }
