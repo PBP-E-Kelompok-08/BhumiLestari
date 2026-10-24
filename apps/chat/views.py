@@ -768,7 +768,7 @@ def escalate_to_seller_api(request, session_id):
 
 
 @login_required
-# def switch_to_ai_session_api(request, session_id):
+def switch_to_ai_session_api(request, session_id):
     """
     POST: Mengalihkan sesi obrolan langsung (direct) kembali ke sesi asisten AI bot.
     Riwayat obrolan pembeli dan penjual tetap dipertahankan.
