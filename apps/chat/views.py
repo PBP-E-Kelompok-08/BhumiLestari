@@ -1680,3 +1680,5 @@ def broadcast_view(request):
 
 
 # Fix: ensure single active card per store in buyer inbox
+
+# Fix: exclude forward_msg_id from history copy loop to prevent duplicate handover message

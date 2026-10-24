@@ -113,7 +113,7 @@ def query_openrouter(messages_payload, custom_models=None):
                         return content.strip()
                 raise ValueError("Format respons OpenRouter tidak sesuai yang diharapkan.")
 
-            elif response.status_code in (429, 502, 503, 504):
+            elif response.status_code in (404, 429, 502, 503, 504):
                 logger.warning(
                     f"Model {model_name} mengembalikan status {response.status_code} ({response.text[:100]}). Mencoba fallback berikutnya..."
                 )
