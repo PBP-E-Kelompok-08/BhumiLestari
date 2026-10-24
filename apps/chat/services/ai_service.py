@@ -7,11 +7,13 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Model gratis dibanyakin biar ga gampang limit
+# Model gratis & teruji di OpenRouter dengan fallback berantai
 DEFAULT_AI_MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
+    "google/gemini-2.5-flash",
+    "meta-llama/llama-3.2-3b-instruct",
+    "deepseek/deepseek-chat",
+    "openrouter/auto",
+    "liquid/lfm-2.5-2.6b:free",
 ]
 
 HANDOVER_TOKEN = "[HANDOVER_TO_SELLER]"
@@ -25,17 +27,27 @@ def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot
             general_section += f"{idx}. Kata Kunci/Tanya: {item.question}\n   Jawab: {item.answer}\n"
 
     products_section = ""
+    handled_pids = set()
     for context in product_contexts:
         p_id = context.product_id
+        handled_pids.add(p_id)
         p_name = context.product_name or f"Produk {p_id}"
         qas = knowledges_by_product.get(p_id, [])
 
-        products_section += f"\n--- [PRODUK: {p_name} (ID: {p_id})] ---\n"
+        products_section += f"\n--- [PRODUK TERKAIT DIPILIH: {p_name} (ID: {p_id})] ---\n"
         if qas:
             for idx, item in enumerate(qas, 1):
                 products_section += f"{idx}. Tanya: {item.question}\n   Jawab: {item.answer}\n"
         else:
             products_section += "(Penjual belum mendaftarkan jawaban khusus untuk produk ini).\n"
+
+    # Sertakan juga informasi produk aktif toko lainnya yang terdaftar pada knowledge base
+    for p_id, qas in knowledges_by_product.items():
+        if p_id not in handled_pids and qas:
+            p_name = qas[0].product_name or f"Produk {p_id}"
+            products_section += f"\n--- [PRODUK KATALOG: {p_name} (ID: {p_id})] ---\n"
+            for idx, item in enumerate(qas, 1):
+                products_section += f"{idx}. Tanya: {item.question}\n   Jawab: {item.answer}\n"
 
     prompt = f"""
             Kamu adalah {bot_name}, Asisten AI Toko "{store_name}" di platform e-commerce BhumiLestari.
@@ -93,12 +105,17 @@ def query_openrouter(messages_payload, custom_models=None):
                 data = response.json()
                 choices = data.get("choices", [])
                 if choices and "message" in choices[0]:
-                    return choices[0]["message"]["content"].strip()
+                    msg = choices[0]["message"]
+                    content = msg.get("content")
+                    if not content and msg.get("reasoning"):
+                        content = msg.get("reasoning")
+                    if content and isinstance(content, str):
+                        return content.strip()
                 raise ValueError("Format respons OpenRouter tidak sesuai yang diharapkan.")
 
             elif response.status_code in (429, 502, 503, 504):
                 logger.warning(
-                    f"Model {model_name} mengembalikan status {response.status_code} (Rate limit/Busy). Mencoba fallback berikutnya..."
+                    f"Model {model_name} mengembalikan status {response.status_code} ({response.text[:100]}). Mencoba fallback berikutnya..."
                 )
                 continue
             else:
