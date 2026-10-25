@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>Laporan Penjualan - BhumiLestari</title>
+  <link rel="stylesheet" href="{% static 'css/sales_report.css' %}">
+{% endblock meta %}
+
+{% block content %}
+<div class="report-page">
+  <h1 class="page-title">Laporan dan Analisis Penjualan</h1>
+
+  <nav class="filters" aria-label="Periode laporan">
+    <a href="?periode=mingguan" class="filter">Mingguan</a>
+    <a href="?periode=bulanan" class="filter is-active">Bulanan</a>
+  </nav>
+
+  <div class="stats">
+    <div class="card"><span>Total Pendapatan</span><strong>Rp. 15.003.431</strong></div>
+    <div class="card"><span>Rata - rata Pesanan</span><strong>Rp. 139.783</strong></div>
+    <div class="card"><span>Pertumbuhan</span><strong>+ 9%</strong></div>
+  </div>
+
+  <h2 class="section-title">Produk Terlaris</h2>
+
+  <div class="table-wrap">
+    <table class="products">
+      <thead>
+        <tr>
+          <th>Produk</th>
+          <th>Terjual</th>
+          <th>Pendapatan Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Tas Kain Bambi</td><td>68 buah</td><td>Rp.543.013.400</td></tr>
+        <tr><td>Toples Kaca Bamboo Series</td><td>57 buah</td><td>Rp.572.013.440</td></tr>
+        <tr><td>Sabun Batang Lovelyz</td><td>53 buah</td><td>Rp.435.123.455</td></tr>
+        <tr><td>Sikat Gigi Siwak</td><td>52 buah</td><td>Rp.423.444.778</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock content %}
