@@ -1,3 +1,73 @@
 from django.contrib import admin
+from apps.chat.models import (
+    ProductKnowledge,
+    ChatSession,
+    SessionProductContext,
+    ChatMessage,
+    SellerChatSettings,
+    SessionRating,
+    UserReport,
+    BroadcastChannel,
+    BroadcastMessage,
+)
 
-# Register your models here.
+
+class SessionProductContextInline(admin.TabularInline):
+    model = SessionProductContext
+    extra = 0
+
+class ChatMessageInline(admin.TabularInline):
+    model = ChatMessage
+    extra = 0
+    fields = ('sender_type', 'sender', 'content', 'is_read', 'is_inherited_from_ai', 'created_at')
+    readonly_fields = ('created_at',)
+
+@admin.register(ProductKnowledge)
+class ProductKnowledgeAdmin(admin.ModelAdmin):
+    list_display = ('question', 'product_name', 'product_id', 'seller', 'is_active', 'updated_at')
+    list_filter = ('is_active', 'seller')
+    search_fields = ('question', 'answer', 'product_id', 'product_name')
+
+@admin.register(ChatSession)
+class ChatSessionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'buyer', 'seller', 'session_type', 'status', 'is_archived_by_buyer', 'is_archived_by_seller', 'created_at')
+    list_filter = ('session_type', 'status', 'handover_reason')
+    search_fields = ('id', 'buyer__email', 'seller__email')
+    inlines = [SessionProductContextInline, ChatMessageInline]
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'session', 'sender_type', 'sender', 'is_read', 'is_inherited_from_ai', 'created_at')
+    list_filter = ('sender_type', 'is_read', 'is_inherited_from_ai')
+    search_fields = ('content', 'session__id')
+
+
+@admin.register(SellerChatSettings)
+class SellerChatSettingsAdmin(admin.ModelAdmin):
+    list_display = ('seller', 'bot_name', 'is_auto_reply_enabled', 'operating_hours_start', 'operating_hours_end', 'updated_at')
+    search_fields = ('seller__email', 'bot_name')
+
+
+@admin.register(SessionRating)
+class SessionRatingAdmin(admin.ModelAdmin):
+    list_display = ('session', 'user', 'rating', 'created_at')
+    list_filter = ('rating',)
+    search_fields = ('session__id', 'user__email', 'feedback')
+
+
+@admin.register(UserReport)
+class UserReportAdmin(admin.ModelAdmin):
+    list_display = ('reporter', 'reported_user', 'session', 'created_at')
+    search_fields = ('reporter__email', 'reported_user__email', 'reason')
+
+
+@admin.register(BroadcastChannel)
+class BroadcastChannelAdmin(admin.ModelAdmin):
+    list_display = ('name', 'seller', 'followers_count', 'created_at')
+    search_fields = ('name', 'seller__email')
+
+
+@admin.register(BroadcastMessage)
+class BroadcastMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'channel', 'viewed_count', 'created_at')
+    search_fields = ('channel__name', 'content')

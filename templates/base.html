@@ -25,17 +25,16 @@
             </div> 
         
             <div class="container-right">
-                <form id="search-form" method="get" action="" class="search">
+                <form id="search-form" method="get" action="{% url 'dashboard:show_dashboard_home' %}" class="search">
                     <input id="search-input"
                         type="search"
                         name="title"
-                        value=""
+                        value="{{ request.GET.title }}"
                         placeholder="Cari produk Anda di sini..."
                         class="search__input"
                         aria-label="Cari produk Anda di sini...">
                 </form>
 
-                <img class="notif" src="{% static 'img/notif.png' %}" alt="Notification">
                 <img class="question" src="{% static 'img/question.png' %}" alt="Question">
 
                 {% if user.is_authenticated %}
@@ -47,7 +46,7 @@
                                 <path d="M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
                             </svg>
                         </span>
-                        <span class="nav-username">{{ user.get_full_name|default:user.get_username }}</span>
+                        <span class="nav-username">{{ user.seller_profile.store_name|default:user.username }}</span>
                     </button>
 
                     <div class="nav-dropdown" id="userMenu" hidden>

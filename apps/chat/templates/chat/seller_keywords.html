@@ -1,0 +1,98 @@
+{% extends "chat/chat_base.html" %}
+{% load static %}
+
+{% block title %}Balasan Kata Kunci - Manajemen Chat Penjual{% endblock title %}
+
+{% block left_panel_content %}
+<nav class="chat-subnav-list" aria-label="Sub-menu Manajemen Chat Penjual">
+    <a href="{% url 'chat:seller_settings' %}" class="chat-subnav-item">Pengaturan Sambutan</a>
+    <a href="{% url 'chat:seller_keywords' %}" class="chat-subnav-item active">Balasan Kata Kunci</a>
+</nav>
+{% endblock left_panel_content %}
+
+{% block main_area_content %}
+<header class="chat-main-header">
+    <div class="chat-header-left">
+        <a href="{% url 'chat:seller_chat' %}" class="chat-back-btn" title="Kembali ke Chat Pembeli" aria-label="Kembali ke Chat Pembeli">
+            <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="30" y1="18" x2="7" y2="18"/>
+                <polyline points="15 10 7 18 15 26"/>
+            </svg>
+        </a>
+        <h1 class="chat-header-title" style="font-size: 27px;">Balasan Kata Kunci</h1>
+    </div>
+</header>
+
+<section class="chat-settings-scroll">
+    <div class="chat-settings-wrap">
+        <div class="chat-settings-card row-card">
+            <label for="kwBotAutoReplyToggle" class="chat-settings-label">Bot Auto Reply</label>
+            <label class="chat-switch" aria-label="Aktifkan Bot Auto Reply">
+                <input type="checkbox" id="kwBotAutoReplyToggle" {% if chat_settings.is_auto_reply_enabled %}checked{% endif %}>
+                <span class="chat-switch-slider"></span>
+            </label>
+        </div>
+
+        <div class="chat-keyword-container">
+            <h2 class="chat-settings-label">Balasan Kata Kunci</h2>
+
+            <div id="keywordListContainer" class="chat-keyword-list">
+                {% for k in knowledges %}
+                <div class="chat-keyword-item" data-id="{{ k.id }}">
+                    <div class="chat-keyword-info">
+                        <h3 class="chat-keyword-title">{{ k.question }}</h3>
+                        <p class="chat-keyword-answer">{{ k.answer }}</p>
+                    </div>
+                    <div class="chat-keyword-actions">
+                        <button type="button"
+                                class="chat-kw-edit-btn js-edit-kw"
+                                data-id="{{ k.id }}"
+                                data-question="{{ k.question }}"
+                                data-answer="{{ k.answer }}"
+                                data-product-id="{{ k.product_id|default:'' }}"
+                                data-product-name="{{ k.product_name|default:'' }}">Edit</button>
+                        <button type="button"
+                                class="chat-kw-delete-btn js-delete-kw"
+                                data-id="{{ k.id }}">Hapus</button>
+                        <label class="chat-switch" aria-label="Status Aktif Kata Kunci {{ k.question }}">
+                            <input type="checkbox"
+                                   class="js-toggle-kw"
+                                   data-id="{{ k.id }}"
+                                   {% if k.is_active %}checked{% endif %}>
+                            <span class="chat-switch-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                {% empty %}
+                <p id="emptyKeywordsText" style="color: #F2EAC0; margin: 4px 0 8px;">Belum ada kata kunci tersimpan. Tambahkan kata kunci baru di bawah.</p>
+                {% endfor %}
+            </div>
+
+            <form id="keywordCreateEditForm" style="display: flex; flex-direction: column; gap: 14px; margin-top: 6px;">
+                <input type="hidden" id="editingKeywordId" value="">
+                <input type="text"
+                       id="keywordQuestionInput"
+                       class="chat-kw-input-pill"
+                       placeholder="Kata Kunci Baru misal: stok, syalala"
+                       aria-label="Kata Kunci Baru"
+                       required>
+                <input type="text"
+                       id="keywordAnswerInput"
+                       class="chat-kw-input-pill"
+                       placeholder="Balasan otomatisnya apaan"
+                       aria-label="Balasan Otomatis"
+                       required>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="submit" id="submitKeywordBtn" class="chat-kw-submit-btn">Tambah balasan</button>
+                    <button type="button" id="cancelEditKeywordBtn" class="chat-pill-btn-terracotta" hidden>Batal Edit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock main_area_content %}
+
+{% block scripts %}
+<script src="{% static 'chat/js/seller_management.js' %}"></script>
+{% endblock scripts %}
+

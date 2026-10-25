@@ -1,0 +1,93 @@
+{% extends "chat/chat_base.html" %}
+{% load static %}
+
+{% block title %}Pengaturan Sambutan - Manajemen Chat Penjual{% endblock title %}
+
+{% block left_panel_content %}
+<nav class="chat-subnav-list" aria-label="Sub-menu Manajemen Chat Penjual">
+    <a href="{% url 'chat:seller_settings' %}" class="chat-subnav-item active">Pengaturan Sambutan</a>
+    <a href="{% url 'chat:seller_keywords' %}" class="chat-subnav-item">Balasan Kata Kunci</a>
+</nav>
+{% endblock left_panel_content %}
+
+{% block main_area_content %}
+<header class="chat-main-header">
+    <div class="chat-header-left">
+        <a href="{% url 'chat:seller_chat' %}" class="chat-back-btn" title="Kembali ke Chat Pembeli" aria-label="Kembali ke Chat Pembeli">
+            <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="30" y1="18" x2="7" y2="18"/>
+                <polyline points="15 10 7 18 15 26"/>
+            </svg>
+        </a>
+        <h1 class="chat-header-title" style="font-size: 27px;">Pengaturan Sambutan</h1>
+    </div>
+</header>
+
+<section class="chat-settings-scroll">
+    <form id="sellerWelcomeSettingsForm" class="chat-settings-wrap">
+        <div class="chat-settings-card row-card">
+            <label for="botAutoReplyToggle" class="chat-settings-label">Bot Auto Reply</label>
+            <label class="chat-switch" aria-label="Aktifkan Bot Auto Reply">
+                <input type="checkbox" id="botAutoReplyToggle" name="is_auto_reply_enabled" {% if chat_settings.is_auto_reply_enabled %}checked{% endif %}>
+                <span class="chat-switch-slider"></span>
+            </label>
+        </div>
+
+        <div class="chat-settings-card row-card">
+            <label for="botNameInput" class="chat-settings-label">Beri Nama Botmu</label>
+            <input type="text"
+                   id="botNameInput"
+                   name="bot_name"
+                   class="chat-settings-text-input"
+                   placeholder="Beri nama botmu!"
+                   value="{{ chat_settings.bot_name }}">
+        </div>
+
+        <div class="chat-settings-card col-card">
+            <label for="welcomeMessageInput" class="chat-settings-label">Isi Pesan Sambutan</label>
+            <textarea id="welcomeMessageInput"
+                      name="welcome_message"
+                      class="chat-settings-textarea"
+                      placeholder="Isi pesan sambutan saat pembeli mengechat tokomu">{{ chat_settings.welcome_message }}</textarea>
+        </div>
+
+        <div class="chat-settings-card row-card">
+            <span class="chat-settings-label">Jam Operasional Toko</span>
+            <div class="chat-hours-group">
+                <input type="text"
+                       id="operatingStartInput"
+                       name="operating_hours_start"
+                       class="chat-time-box"
+                       placeholder="08:00"
+                       maxlength="5"
+                       aria-label="Jam Buka Operasional (HH:MM)"
+                       value="{{ operating_hours_start }}">
+                <span class="chat-hours-sep">sampai</span>
+                <input type="text"
+                       id="operatingEndInput"
+                       name="operating_hours_end"
+                       class="chat-time-box"
+                       placeholder="19:00"
+                       maxlength="5"
+                       aria-label="Jam Tutup Operasional (HH:MM)"
+                       value="{{ operating_hours_end }}">
+            </div>
+        </div>
+
+        <div class="chat-settings-card col-card">
+            <label for="closedMessageInput" class="chat-settings-label">Pesan Saat Toko Tutup</label>
+            <textarea id="closedMessageInput"
+                      name="closed_message"
+                      class="chat-settings-textarea"
+                      placeholder="Isi pesan sambutan saat pembeli mengechat tokomu di luar jam operasional">{{ chat_settings.closed_message }}</textarea>
+        </div>
+
+        <button type="submit" id="saveSettingsBtn" class="chat-save-pill-btn">Simpan</button>
+    </form>
+</section>
+{% endblock main_area_content %}
+
+{% block scripts %}
+<script src="{% static 'chat/js/seller_management.js' %}"></script>
+{% endblock scripts %}
+
