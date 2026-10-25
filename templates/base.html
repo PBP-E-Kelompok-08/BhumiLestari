@@ -25,11 +25,11 @@
             </div> 
         
             <div class="container-right">
-                <form id="search-form" method="get" action="" class="search">
+                <form id="search-form" method="get" action="{% url 'dashboard:show_dashboard_home' %}" class="search">
                     <input id="search-input"
                         type="search"
                         name="title"
-                        value=""
+                        value="{{ request.GET.title }}"
                         placeholder="Cari produk Anda di sini..."
                         class="search__input"
                         aria-label="Cari produk Anda di sini...">

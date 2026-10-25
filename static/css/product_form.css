@@ -1,0 +1,156 @@
+.settings {
+    padding: 1.5rem 2rem;
+}
+
+.add-product {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 1.5rem;
+}
+
+.field-name,
+.field-description,
+.form-buttons {
+    grid-column: 1/3;
+}
+
+.field-category,
+.field-eco_features,
+.field-image {
+    grid-column: 1;
+}
+
+.field-materials,
+.field-origin,
+.field-stock,
+.field-price,
+.field-discount,
+.field-final,
+.field-verification_document {
+    grid-column: 2;
+}
+
+.field-category { 
+    grid-row: 3; 
+}
+
+.field-eco_features { 
+    grid-row: 4/9; 
+}
+
+.field-image { 
+    grid-row: 9; 
+}
+
+.field-materials { 
+    grid-row: 3; 
+}
+
+.field-origin { 
+    grid-row: 4; 
+}
+
+.field-stock { 
+    grid-row: 5; 
+}
+
+.field-price { 
+    grid-row: 6; 
+}
+
+.field-discount { 
+    grid-row: 7; 
+}
+
+.field-final { 
+    grid-row: 8; 
+}
+
+.field-verification_document { 
+    grid-row: 9; 
+}
+
+.form-buttons {
+    grid-row: 10;
+    display: flex;
+    gap: 1rem;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-weight: 600;
+}
+
+.field input,
+.field textarea,
+.field select {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid transparent;
+    background: white;
+    color: var(--ink);
+    font-family: inherit;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+    border-color: var(--ink);
+}
+
+.field-final input {
+    background: #d9d9d9;
+}
+
+.field-eco_features {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-eco_features > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: white;
+    padding: 0.8rem;
+}
+
+.field-eco_features div label {
+    font-weight: 400;
+}
+
+.field-eco_features input {
+    width: auto;
+    margin-right: 0.4rem;
+}
+
+.btn-save,
+.btn-cancel {
+    padding: 0.6rem 1.8rem;
+    border: none;
+    color: white;
+    font-family: inherit;
+    font-size: 1rem;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-save {
+    background: var(--ink);
+}
+
+.btn-cancel {
+    background: #8a7f80;
+}
+
+@media (max-width: 600px) {
+    .add-product {
+        display: block;
+    }
+
+    .field {
+        margin-bottom: 1rem;
+    }
+}
