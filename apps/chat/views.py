@@ -540,73 +540,6 @@ def search_sellers_api(request):
 
 
 @login_required
-def search_products_api(request):
-    """
-    GET: Pencarian produk dari toko penjual yang dipilih dengan AJAX debounce atau produk random.
-    Query params: ?seller_id=...&q=...
-    """
-    if request.method != "GET":
-        return _json_error("Hanya metode GET yang diizinkan.", status=405)
-
-    seller_id = request.GET.get("seller_id")
-    if not seller_id:
-        return _json_error("Parameter seller_id wajib disertakan.")
-
-    seller_user = get_object_or_404(User, id=seller_id)
-    q = request.GET.get("q", "").strip()
-
-    results = []
-    try:
-        from apps.products.models import Product
-        products_qs = Product.objects.filter(seller__user=seller_user)
-        if q:
-            products_qs = products_qs.filter(
-                Q(name__icontains=q) |
-                Q(description__icontains=q)
-            )[:15]
-        else:
-            products_qs = products_qs.order_by("?")[:10]
-
-        for p in products_qs:
-            results.append({
-                "product_id": f"PRD-{p.id}",
-                "product_name": p.name,
-                "price": int(p.price) if p.price else 0,
-                "stock": p.stock,
-                "image_url": p.image.url if p.image else None,
-            })
-    except Exception as e:
-        logger.warning(f"Error querying Product: {e}")
-
-    # Fallback ke ProductKnowledge bila penjual belum memiliki entri di katalog Product
-    if len(results) == 0:
-        pk_qs = ProductKnowledge.objects.filter(seller=seller_user, product_id__isnull=False).exclude(product_id="")
-        if q:
-            pk_qs = pk_qs.filter(Q(product_name__icontains=q) | Q(question__icontains=q))
-        else:
-            pk_qs = pk_qs.order_by("?")
-
-        seen_pids = set()
-        for k in pk_qs[:10]:
-            if k.product_id not in seen_pids:
-                seen_pids.add(k.product_id)
-                results.append({
-                    "product_id": k.product_id,
-                    "product_name": k.product_name or k.product_id,
-                    "price": 0,
-                    "stock": None,
-                    "image_url": None,
-                })
-
-    return JsonResponse({
-        "status": "success",
-        "seller_id": seller_user.id,
-        "total": len(results),
-        "products": results,
-    })
-
-
-@login_required
 def send_ai_message_api(request, session_id):
 
     if request.method != "POST":
@@ -675,12 +608,23 @@ def send_ai_message_api(request, session_id):
         is_active=True
     ))
 
+    real_products = []
+    try:
+        from apps.products.models import Product
+        real_products = list(
+            Product.objects.filter(seller__user=session.seller)
+            .exclude(status__in=["rejected", "expired"])[:15]
+        )
+    except Exception as e:
+        logger.warning(f"Gagal mengambil katalog produk penjual untuk AI prompt: {e}")
+
     system_prompt = build_system_prompt(
         store_name,
         product_contexts,
         knowledges_by_product,
         bot_name=bot_name,
-        general_knowledges=general_knowledges
+        general_knowledges=general_knowledges,
+        real_products=real_products,
     )
 
     recent_msgs = session.messages.exclude(id=user_msg.id).order_by("-created_at")[:8]
@@ -1596,25 +1540,10 @@ def buyer_chat_view(request):
         for s in sellers_qs
     ]
 
-    catalog_products = []
-    try:
-        from apps.products.models import Product
-        for p in Product.objects.select_related("seller__user").all():
-            seller_user = p.seller.user
-            catalog_products.append({
-                "product_id": f"PRD-{p.id}",
-                "product_name": p.name,
-                "seller_id": seller_user.id,
-                "store_name": p.seller.store_name,
-            })
-    except Exception:
-        pass
-
     context = {
         "active_nav": "chat",
         "is_seller_mode": False,
         "sellers": sellers,
-        "catalog_products": catalog_products,
         "initial_seller_id": request.GET.get("seller_id", ""),
         "initial_product_id": request.GET.get("product_id", ""),
         "initial_product_name": request.GET.get("product_name", ""),

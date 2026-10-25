@@ -27,7 +27,6 @@ from apps.chat.views import (
     send_broadcast_message_api,
     toggle_archive_broadcast_channel_api,
     search_sellers_api,
-    search_products_api,
 )
 
 app_name = "chat"
@@ -42,7 +41,6 @@ urlpatterns = [
 
     # Search APIs (Debounce AJAX / Random Fallback)
     path("chat/api/sellers/search/", search_sellers_api, name="search_sellers"),
-    path("chat/api/products/search/", search_products_api, name="search_products"),
 
     # Buyer & AI Chat Sessions
     path("chat/api/sessions/ai/", get_or_create_ai_session_api, name="get_or_create_ai_session"),
