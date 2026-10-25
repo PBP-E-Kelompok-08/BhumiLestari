@@ -15,7 +15,7 @@ def show_dashboard_home(request):
         elif role == "seller":
             name = request.user.seller_profile.store_name
         elif role == "buyer":
-            name = request.user.full_name
+            name = request.user.username
 
     return render(request, "dashboard_home.html", {"role": role, "name": name})
 
@@ -35,7 +35,6 @@ def api_products(request):
     elif role == "admin":
         products = Product.objects.all()
     else:
-        name = user.usernameS
         products = Product.objects.filter(status="verified")
 
     query = request.GET.get("title", "").strip() or request.GET.get("q", "").strip()
