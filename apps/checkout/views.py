@@ -98,3 +98,10 @@ def show_checkout(request):
         "item_count": 2,
     }
     return render(request, "checkout.html", context)
+
+def order_list(request):
+    return render(request, "order_list.html")
+
+
+def order_detail(request):
+    return render(request, "order_detail.html")

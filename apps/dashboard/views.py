@@ -74,3 +74,10 @@ def api_products(request):
         "products": items,
         "items": items,
     })
+
+def seller_summary(request):
+    name = request.user.seller_profile.store_name
+    return render(request, "seller_summary.html", {"name": name})
+
+def sales_report(request):
+    return render(request, "sales_report.html")

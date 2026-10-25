@@ -1,0 +1,102 @@
+.order-page {
+  padding: 2rem;
+  background: #eaf3d1;
+  color: #4d6b5e;
+  font-family: "Prompt", sans-serif;
+}
+
+.back-link {
+  font-size: 0.8rem;
+  color: #4d6b5e;
+  text-decoration: none;
+}
+
+.page-title {
+  margin: 0.5rem 0 1.5rem;
+  font-family: "Changa", sans-serif;
+  font-size: 2.25rem;
+}
+
+.order-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.card {
+  padding: 1.5rem;
+  background: white;
+}
+
+.card-title {
+  margin: 0 0 0.75rem;
+  font-family: "Changa", sans-serif;
+  font-size: 1.15rem;
+}
+
+.subhead {
+  margin-top: 1.5rem;
+}
+
+.rows {
+  margin: 0;
+}
+
+.rows-next {
+  margin-top: 1.25rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+}
+
+.row dt {
+  margin: 0;
+}
+
+.row dd {
+  margin: 0;
+}
+
+.row-total {
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+}
+
+.pill {
+  padding: 0.2rem 0.8rem;
+  background: #d9d9d9;
+  border-radius: 50px;
+  font-size: 0.85rem;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn {
+  padding: 0.6rem 1rem;
+  border: 0;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-accept {
+  background: #4d6b5e;
+}
+
+.btn-reject {
+  background: #d4503f;
+}
+
+@media (max-width: 600px) {
+  .order-grid {
+    grid-template-columns: 1fr;
+  }
+}
