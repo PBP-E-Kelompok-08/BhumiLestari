@@ -246,7 +246,7 @@
             }
 
             // In Seller POV (Screen 2):
-            // Buyer messages are on the left (incoming, white bubble) with the terracotta "Laporkan Pembeli" pill button
+            // Buyer messages are on the left (incoming, white bubble)
             // Seller / AI messages are on the right (outgoing, dark green bubble)
             var isIncomingBuyer = m.sender_type === "buyer";
             var rowClass = isIncomingBuyer ? "incoming" : "outgoing";
@@ -261,13 +261,6 @@
 
             html += ChatCore.escapeHtml(m.content);
 
-            if (isIncomingBuyer) {
-                html +=
-                    '<div class="chat-bubble-actions">' +
-                    '<button type="button" class="chat-pill-btn-terracotta js-report-buyer-bubble">Laporkan Pembeli</button>' +
-                    "</div>";
-            }
-
             html += "</div>";
             if (timeStr) {
                 html += '<span class="chat-bubble-time">' + ChatCore.escapeHtml(timeStr) + "</span>";
@@ -276,12 +269,6 @@
         });
 
         els.messagesContainer.innerHTML = html;
-
-        els.messagesContainer.querySelectorAll(".js-report-buyer-bubble").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                openReportBuyerModal();
-            });
-        });
 
         if (els.chatBody) {
             els.chatBody.scrollTop = els.chatBody.scrollHeight;

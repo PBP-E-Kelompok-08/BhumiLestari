@@ -793,9 +793,9 @@
             showProductDropdown();
 
             try {
-                var url = "/chat/api/products/search/?seller_id=" + encodeURIComponent(sId) + "&q=" + encodeURIComponent(q);
+                var url = "/api/products/?seller_id=" + encodeURIComponent(sId) + "&title=" + encodeURIComponent(q);
                 var res = await ChatCore.apiFetch(url);
-                var products = res.products || [];
+                var products = res.products || res.items || [];
 
                 if (products.length === 0) {
                     var emptyHtml = '<li class="chat-search-dropdown-empty">Belum ada produk dari toko ini atau tidak cocok dengan pencarian.</li>';
@@ -804,20 +804,24 @@
                 } else {
                     var html = "";
                     products.forEach(function (p) {
-                        var priceStr = p.price ? "Rp " + Number(p.price).toLocaleString("id-ID") : "";
-                        var subText = [priceStr, p.product_id].filter(Boolean).join(" • ");
+                        var pId = p.product_id || p.id || "";
+                        var pName = p.product_name || p.name || pId;
+                        var pImg = p.image_url || p.image || null;
+                        var pPrice = p.final_price != null ? p.final_price : (p.price != null ? p.price : 0);
+                        var priceStr = pPrice ? "Rp " + Number(pPrice).toLocaleString("id-ID") : "";
+                        var subText = [priceStr, pId ? "ID: " + pId : ""].filter(Boolean).join(" • ");
                         html +=
                             '<li class="chat-search-dropdown-item js-select-product" data-id="' +
-                            ChatCore.escapeHtml(p.product_id) +
+                            ChatCore.escapeHtml(pId) +
                             '" data-name="' +
-                            ChatCore.escapeHtml(p.product_name) +
+                            ChatCore.escapeHtml(pName) +
                             '" role="option" tabindex="0">' +
                             '<div class="chat-search-item-img">' +
-                            (p.image_url ? '<img src="' + ChatCore.escapeHtml(p.image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">' : '📦') +
+                            (pImg ? '<img src="' + ChatCore.escapeHtml(pImg) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">' : '📦') +
                             '</div>' +
                             '<div class="chat-search-item-info">' +
                             '<span class="chat-search-item-title">' +
-                            ChatCore.escapeHtml(p.product_name) +
+                            ChatCore.escapeHtml(pName) +
                             '</span>' +
                             '<span class="chat-search-item-sub">' +
                             ChatCore.escapeHtml(subText) +

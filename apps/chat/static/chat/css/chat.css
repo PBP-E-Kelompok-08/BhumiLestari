@@ -31,6 +31,7 @@
     --chat-star: #FFE540;
     --chat-star-empty: #E5DFC5;
     --chat-danger: #FF0303;
+    --chat-danger-background: #de0000;
     --chat-date-pill: #D9D9D9;
     --font-heading: 'Changa', sans-serif;
     --font-body: 'Prompt', sans-serif;
@@ -953,13 +954,20 @@ body.chat-page-body {
     background-color: var(--chat-sidebar-bg);
     padding: 20px 28px;
     color: #FFFFFF;
+    box-sizing: border-box;
 }
 
 .chat-settings-card.row-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
+    gap: 14px 20px;
+    flex-wrap: wrap;
+}
+
+.chat-settings-card.row-card .chat-settings-label {
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .chat-settings-label {
@@ -1001,19 +1009,29 @@ body.chat-page-body {
 .chat-hours-group {
     display: flex;
     align-items: center;
-    gap: 22px;
+    gap: 14px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .chat-time-box {
+    width: 90px;
+    max-width: 96px;
+    height: 38px;
     background-color: var(--chat-olive);
     color: #FFFFFF;
     border: none;
-    height: 36px;
-    padding: 0 18px;
+    padding: 0 8px;
     font-family: var(--font-heading);
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 700;
     text-align: center;
+    box-sizing: border-box;
+}
+
+.chat-time-box:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.7);
 }
 
 .chat-hours-sep {
@@ -1021,6 +1039,7 @@ body.chat-page-body {
     font-size: 18px;
     font-weight: 700;
     color: #FFFFFF;
+    white-space: nowrap;
 }
 
 .chat-save-pill-btn {
@@ -1154,14 +1173,28 @@ body.chat-page-body {
 }
 
 .chat-kw-delete-btn {
-    background: transparent;
+    background-color: var(--chat-danger-background);
     border: none;
-    color: var(--chat-danger);
+    color: #FFFFFF;
     font-family: var(--font-heading);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.chat-kw-delete-btn:hover {
+    background-color: #d60000;
+}
+
+.chat-kw-delete-btn:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px var(--chat-danger);
 }
 
 .chat-kw-input-pill {
@@ -1698,6 +1731,18 @@ body.chat-page-body {
     .chat-settings-card.row-card {
         flex-direction: column;
         align-items: flex-start;
+        gap: 14px;
+    }
+
+    .chat-settings-card.row-card .chat-settings-label {
+        white-space: normal;
+    }
+
+    .chat-hours-group {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 14px;
     }
 
     .chat-settings-text-input {
