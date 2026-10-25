@@ -34,6 +34,8 @@ class Order(models.Model):
     STATUS_CHOICES = [("diproses", "Diproses"), ("dikirim", "Dikirim"), ("selesai", "Selesai")]
 
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders")
+    seller = models.ForeignKey("users.SellerProfile", on_delete=models.SET_NULL, null=True, related_name="orders")
+    store_name = models.CharField(max_length=100) 
     recipient_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20)
     shipping_address = models.TextField()
