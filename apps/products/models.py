@@ -39,6 +39,8 @@ class Product(models.Model):
     image = models.ImageField(upload_to="products/images/")
     verification_document = models.FileField(upload_to="products/certifications/")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending", editable=False)
+    verification_summary = models.TextField(blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     @property
     def final_price(self):

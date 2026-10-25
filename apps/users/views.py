@@ -102,9 +102,9 @@ def login_view(request):
             messages.error(request, "Email atau password salah!")
             return redirect('users:login')
 
-        if user.role == 'seller':
-            messages.warning(request, 'Maaf, halaman penjual sedang dalam maintenance.')
-            return redirect('users:login')
+        # if user.role == 'seller':
+        #     messages.warning(request, 'Maaf, halaman penjual sedang dalam maintenance.')
+        #     return redirect('users:login')
 
         login(request, user)
         return redirect('dashboard:show_dashboard_home')
