@@ -10,6 +10,6 @@ def show_dashboard_home(request):
         profile = getattr(user, "seller_profile", None)
         name = profile.store_name
     else:
-        name = user.full_name
+        name = user.username
 
     return render(request, "dashboard_home.html", {"name": name})

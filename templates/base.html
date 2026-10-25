@@ -47,7 +47,7 @@
                                 <path d="M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
                             </svg>
                         </span>
-                        <span class="nav-username">{{ user.get_full_name|default:user.get_username }}</span>
+                        <span class="nav-username">{{ user.seller_profile.store_name|default:user.username }}</span>
                     </button>
 
                     <div class="nav-dropdown" id="userMenu" hidden>

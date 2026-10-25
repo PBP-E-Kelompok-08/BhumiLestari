@@ -16,6 +16,9 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=150, blank=True)
     role = models.CharField(max_length=10, choices=CHOICE_ROLE, default=ROLE_BUYER)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    logo = models.ImageField(upload_to='logos/', blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -46,3 +49,21 @@ class OTPToken(models.Model):
     @staticmethod
     def generate_otp():
         return str(random.randint(100000, 999999))
+
+class PaymentMethod(models.Model):
+    TYPE_CHOICES = [
+        ('bank', 'Bank'),
+        ('ewallet', 'E-Wallet'),
+        ('qris', 'QRIS'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payment_methods')
+    method_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    provider = models.CharField(max_length=100)          # BCA, Mandiri, GoPay, dst.
+    account_number = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def masked_number(self):
+        return '•••• ' + self.account_number[-4:]
+    
+    def __str__(self):
+        return f"{self.provider} - {self.masked_number()}"
