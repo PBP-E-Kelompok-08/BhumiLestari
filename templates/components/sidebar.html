@@ -10,9 +10,9 @@
 
         {% if user.is_superuser %}
             <li>
-                <a href="#">
+                <a href="{% url 'products:verification_queue' %}">
                 <img class="sidebar-logo" src="{% static 'img/manage_toko.png' %}" alt="Logo manajemen toko">
-                Manajemen Toko</a>
+                Manajemen Produk Toko</a>
             </li>
             <li>
                 <a href="#">

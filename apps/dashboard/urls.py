@@ -6,4 +6,5 @@ app_name = "dashboard"
 
 urlpatterns = [
     path("", show_dashboard_home, name="show_dashboard_home"),
+    path("api/products/", api_products, name="api_products"),
 ]
