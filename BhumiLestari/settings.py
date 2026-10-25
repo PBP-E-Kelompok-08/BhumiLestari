@@ -89,13 +89,6 @@ TEMPLATES = [
     },
 ]
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
-
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-
 WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 
 
@@ -179,3 +172,8 @@ CSRF_TRUSTED_ORIGINS = [
 # Media files (foto ulasan yang diunggah pembeli)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+MOCK_API_BASE_URL = os.environ.get(
+    "MOCK_API_BASE_URL",
+    "https://alfarrel-ersya-bhumilestari-mockapi.pws.cs.ui.ac.id",
+)

@@ -32,6 +32,10 @@ class SellerProfile(models.Model):
     def __str__(self):
         return self.store_name
 
+    @property
+    def external_id(self):
+         return f"sel-{self.pk:03d}"
+
 # Model OTP
 class OTPToken(models.Model):
     email = models.EmailField()
