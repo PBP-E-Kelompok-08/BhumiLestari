@@ -19,12 +19,24 @@ DEFAULT_AI_MODELS = [
 HANDOVER_TOKEN = "[HANDOVER_TO_SELLER]"
 
 
-def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot_name="BhumiBot", general_knowledges=None):
+def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot_name="BhumiBot", general_knowledges=None, real_products=None):
     general_section = ""
     if general_knowledges:
         general_section = "\n--- [INFORMASI UMUM TOKO & KATA KUNCI] ---\n"
         for idx, item in enumerate(general_knowledges, 1):
             general_section += f"{idx}. Kata Kunci/Tanya: {item.question}\n   Jawab: {item.answer}\n"
+
+    catalog_section = ""
+    if real_products:
+        catalog_section = "\n--- [KATALOG PRODUK TOKO AKTIF] ---\n"
+        for idx, p in enumerate(real_products, 1):
+            p_price = getattr(p, "final_price", getattr(p, "price", 0))
+            price_str = f"Rp {int(p_price):,}".replace(",", ".") if p_price else "Rp 0"
+            stock_str = f"Stok: {p.stock}" if getattr(p, "stock", None) is not None else ""
+            desc = p.description[:100] + "..." if getattr(p, "description", "") and len(p.description) > 100 else getattr(p, "description", "")
+            catalog_section += f"{idx}. {p.name} (ID: {p.pk}) - Harga: {price_str} | {stock_str}\n"
+            if desc:
+                catalog_section += f"   Deskripsi: {desc}\n"
 
     products_section = ""
     handled_pids = set()
@@ -56,6 +68,7 @@ def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot
             Berikut adalah DAFTAR RESMI INFORMASI & JAWABAN yang disediakan oleh penjual:
             ===========================
             {general_section}
+            {catalog_section}
             {products_section}===========================
 
             INSTRUKSI:
