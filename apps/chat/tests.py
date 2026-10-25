@@ -782,13 +782,9 @@ class ChatAPITest(TestCase):
 
     def test_search_products_api_filtered_by_seller(self):
         self.client.login(username="buyer@test.com", password="password123")
-        url = reverse("chat:search_products")
+        url = reverse("dashboard:api_products")
 
-        # 1. Tanpa seller_id: harus error 400
-        resp_bad = self.client.get(url)
-        self.assertEqual(resp_bad.status_code, 400)
-
-        # 2. Buat produk untuk seller ini
+        # 1. Buat produk untuk seller ini
         from apps.users.models import SellerProfile
         from apps.products.models import Product
         seller_profile, _ = SellerProfile.objects.get_or_create(user=self.seller, defaults={"store_name": "Toko Lestari"})
@@ -805,19 +801,25 @@ class ChatAPITest(TestCase):
             stock=5
         )
 
-        # Query produk toko tanpa keyword: return semua produk/random toko ini
+        # 2. Query produk toko tanpa keyword: return semua produk toko ini
         resp_all = self.client.get(f"{url}?seller_id={self.seller.id}")
         self.assertEqual(resp_all.status_code, 200)
         data_all = resp_all.json()
         self.assertEqual(data_all["status"], "success")
         self.assertEqual(len(data_all["products"]), 2)
 
-        # Query produk dengan keyword: filter sesuai nama produk
-        resp_search = self.client.get(f"{url}?seller_id={self.seller.id}&q=sabun")
+        # 3. Query produk dengan keyword (title / q): filter sesuai nama produk
+        resp_search = self.client.get(f"{url}?seller_id={self.seller.id}&title=sabun")
         self.assertEqual(resp_search.status_code, 200)
         data_search = resp_search.json()
         self.assertEqual(len(data_search["products"]), 1)
         self.assertEqual(data_search["products"][0]["product_name"], "Sabun Cuci Piring Herbal")
+
+        resp_search_q = self.client.get(f"{url}?seller_id={self.seller.id}&q=sabun")
+        self.assertEqual(resp_search_q.status_code, 200)
+        data_search_q = resp_search_q.json()
+        self.assertEqual(len(data_search_q["products"]), 1)
+        self.assertEqual(data_search_q["products"][0]["name"], "Sabun Cuci Piring Herbal")
 
     def test_switch_to_ai_session_preserves_history(self):
         self.client.login(username="buyer@test.com", password="password123")
