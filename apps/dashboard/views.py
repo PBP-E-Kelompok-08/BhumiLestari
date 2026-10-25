@@ -29,6 +29,7 @@ def api_products(request):
     elif role == "admin":
         products = Product.objects.all()
     else:
+        name = user.usernameS
         products = Product.objects.filter(status="verified")
 
     query = request.GET.get("title", "").strip()
