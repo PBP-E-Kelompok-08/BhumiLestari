@@ -1,9 +1,10 @@
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from apps.products.models import Product
 from apps.products.views import get_role, cek_status
+from apps.reviews.services import laporan_ulasan, ringkasan_ulasan_toko
 
 def show_dashboard_home(request):
     role = get_role(request.user)
@@ -75,9 +76,36 @@ def api_products(request):
         "items": items,
     })
 
+def _alihkan_bila_tak_berhak(request, role_diizinkan):
+    """None bila boleh; selain itu redirect (guest -> login, role lain -> beranda)."""
+    role = get_role(request.user)
+    if role == "guest":
+        return redirect("users:login")
+    if role not in role_diizinkan:
+        return redirect("dashboard:show_dashboard_home")
+    return None
+
+
 def seller_summary(request):
-    name = request.user.seller_profile.store_name
-    return render(request, "seller_summary.html", {"name": name})
+    tolak = _alihkan_bila_tak_berhak(request, {"seller"})
+    if tolak:
+        return tolak
+    profile = getattr(request.user, "seller_profile", None)
+    if profile is None:
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "seller_summary.html", {
+        "name": profile.store_name,
+        "ulasan": ringkasan_ulasan_toko(profile),
+    })
 
 def sales_report(request):
-    return render(request, "sales_report.html")
+    tolak = _alihkan_bila_tak_berhak(request, {"seller", "admin"})
+    if tolak:
+        return tolak
+    role = get_role(request.user)
+    profile = getattr(request.user, "seller_profile", None)
+    if role == "seller" and profile is None:
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "sales_report.html", {
+        "ulasan": laporan_ulasan(role, toko=profile, periode=request.GET.get("periode")),
+    })

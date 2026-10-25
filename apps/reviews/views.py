@@ -1,3 +1,4 @@
+import uuid
 from functools import wraps
 
 from django.contrib.auth import get_user_model
@@ -129,6 +130,13 @@ def _baca_teks(request, nama, maks, minimal=1):
     return teks, None
 
 
+def _uuid_atau_none(nilai):
+    try:
+        return uuid.UUID(str(nilai))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _daftar(request, toko):
     pemilik = request.user.is_authenticated and toko.user_id == request.user.id
     dasar = UlasanToko.objects.tampil().filter(toko=toko)
@@ -138,9 +146,9 @@ def _daftar(request, toko):
         qs = qs.filter(rating=int(request.GET["rating"]))
     if request.GET.get("foto") == "1":
         qs = qs.filter(foto__isnull=False).distinct()
-    produk_id = request.GET.get("produk", "")
-    if produk_id.isdigit():
-        qs = qs.filter(produk_id=int(produk_id))
+    produk_id = _uuid_atau_none(request.GET.get("produk", ""))
+    if produk_id:
+        qs = qs.filter(produk_id=produk_id)
     if pemilik and request.GET.get("belum_dibalas") == "1":
         qs = qs.filter(balasan__isnull=True)
     qs = qs.order_by(*URUTAN.get(request.GET.get("urut"), URUTAN["terbaru"]))
@@ -157,7 +165,7 @@ def _daftar(request, toko):
             "ok": True,
             "toko": {"id": toko.id, "nama": toko.store_name},
             "ringkasan": ringkasan_toko(toko.id),
-            "ringkasan_produk": ringkasan_produk(int(produk_id)) if produk_id.isdigit() else None,
+            "ringkasan_produk": ringkasan_produk(produk_id) if produk_id else None,
             "produk": list(daftar_produk),
             "ulasan": [_serialisasi(u, request.user) for u in halaman],
             "halaman": halaman.number,
@@ -213,9 +221,8 @@ def tambah_ulasan(request, toko_id):
     rating, komentar, error = _baca_input(request)
     if error:
         return _err(error)
-    try:
-        produk_id = int(request.POST.get("produk_id", ""))
-    except ValueError:
+    produk_id = _uuid_atau_none(request.POST.get("produk_id", ""))
+    if produk_id is None:
         return _err("Pilih produk yang ingin diulas.")
     files = request.FILES.getlist("foto")
     error = _validasi_foto(files)
