@@ -1,7 +1,11 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
+from django.http import JsonResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_POST
 
-from apps.checkout.models import Cart
+from apps.checkout.models import Cart, CartItem
+from apps.products.models import Product
 
 
 def get_cart_data(request):
@@ -19,8 +23,8 @@ def get_cart_data(request):
             "name": product.name,
             "variation": "Standar",
             "price": int(product.price),
-            "discount": getattr(product, 'discount', 0),
-            "final_price": int(getattr(product, 'final_price', product.price)),
+            "discount": product.discount,
+            "final_price": int(product.final_price),
             "quantity": ci.quantity,
             "selected": ci.is_selected,
             "image_url": product.image.url if product.image else "",
@@ -32,11 +36,10 @@ def get_cart_data(request):
 @login_required(login_url="users:login")
 def show_cart(request):
     stores = get_cart_data(request)
-    
+
     total = 0
     item_count = 0
     selected_count = 0
-    
     for store in stores:
         for item in store["items"]:
             item_count += item["quantity"]
@@ -44,14 +47,42 @@ def show_cart(request):
                 total += item["final_price"] * item["quantity"]
                 selected_count += 1
 
-    # 3. Kirim data asli ke dalam halaman cart.html
     context = {
-        "stores": stores, 
-        "total": total, 
-        "item_count": item_count, 
-        "selected_count": selected_count
+        "stores": stores,
+        "total": total,
+        "item_count": item_count,
+        "selected_count": selected_count,
     }
     return render(request, "cart.html", context)
+
+
+@require_POST
+def add_to_cart(request, product_id):
+    # Tamu -> 401 JSON (bukan redirect HTML)
+    if not request.user.is_authenticated:
+        return JsonResponse({"ok": False, "error": "Silakan login dulu."}, status=401)
+    if getattr(request.user, "role", None) != "buyer":
+        return JsonResponse({"ok": False, "error": "Hanya pembeli yang bisa belanja."}, status=403)
+
+    product = Product.objects.filter(pk=product_id, status="verified").first()
+    if product is None:
+        return JsonResponse({"ok": False, "error": "Produk tidak ditemukan."}, status=404)
+
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    item = CartItem.objects.filter(cart=cart, product=product).first()
+    current = item.quantity if item else 0
+
+    if current + 1 > product.stock:
+        return JsonResponse({"ok": False, "error": "Stok tidak mencukupi."}, status=400)
+
+    if item:
+        item.quantity = current + 1
+        item.save(update_fields=["quantity"])
+    else:
+        CartItem.objects.create(cart=cart, product=product, quantity=1)
+
+    cart_count = cart.items.aggregate(n=Sum("quantity"))["n"] or 0
+    return JsonResponse({"ok": True, "cart_count": cart_count})
 
 
 @login_required(login_url="users:login")
