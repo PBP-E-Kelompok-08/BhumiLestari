@@ -1,0 +1,32 @@
+<div id="ratingModalBackdrop" class="chat-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ratingModalTitle" hidden>
+    <div class="chat-modal-dialog">
+        <button type="button" class="chat-modal-close" id="closeRatingModalBtn" aria-label="Tutup dialog rating">&times;</button>
+        <h2 id="ratingModalTitle" class="chat-modal-title">Ratingmu terhadap percakapan tadi</h2>
+
+        <form id="ratingModalForm">
+            <input type="hidden" id="ratingValueInput" name="rating" value="4">
+
+            <div class="chat-stars-row" role="radiogroup" aria-label="Pilih bintang 1 sampai 5">
+                {% for star_num in "12345" %}
+                <button type="button"
+                        class="chat-star-btn {% if forloop.counter <= 4 %}active{% endif %}"
+                        data-star="{{ forloop.counter }}"
+                        aria-label="Bintang {{ forloop.counter }}">
+                    <svg viewBox="0 0 60 60" aria-hidden="true">
+                        <polygon class="star-poly" points="30,4 37.9,20.5 56,23 42.8,35.7 46,53.8 30,45.1 14,53.8 17.2,35.7 4,23 22.1,20.5"/>
+                    </svg>
+                </button>
+                {% endfor %}
+            </div>
+
+            <label for="ratingFeedbackInput" class="chat-modal-label">Feedback :</label>
+            <textarea id="ratingFeedbackInput"
+                      name="feedback"
+                      class="chat-modal-textarea"
+                      placeholder="Masukkan feedback Anda..."></textarea>
+
+            <button type="submit" id="submitRatingBtn" class="chat-modal-submit-btn">Beri Rating</button>
+        </form>
+    </div>
+</div>
+

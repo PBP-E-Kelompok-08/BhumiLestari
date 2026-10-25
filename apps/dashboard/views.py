@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
@@ -21,8 +22,13 @@ def show_dashboard_home(request):
 
 def api_products(request):
     role = get_role(request.user)
+    seller_id = request.GET.get("seller_id", "").strip()
 
-    if role == "seller":
+    if seller_id:
+        products = Product.objects.filter(Q(seller__user_id=seller_id) | Q(seller_id=seller_id))
+        if role != "admin" and not (role == "seller" and str(request.user.id) == str(seller_id)):
+            products = products.exclude(status__in=["rejected", "expired"])
+    elif role == "seller":
         products = Product.objects.filter(seller__user=request.user)
         for product in products.filter(status="pending"):
             cek_status(product)
@@ -32,7 +38,7 @@ def api_products(request):
         name = user.usernameS
         products = Product.objects.filter(status="verified")
 
-    query = request.GET.get("title", "").strip()
+    query = request.GET.get("title", "").strip() or request.GET.get("q", "").strip()
     if query:
        products = (products.filter(name__icontains=query)
         | products.filter(description__icontains=query)
@@ -44,11 +50,15 @@ def api_products(request):
     for product in products:
         items.append({
             "id": str(product.pk),
+            "product_id": str(product.pk),
             "name": product.name,
+            "product_name": product.name,
             "image": product.image.url if product.image else None,
+            "image_url": product.image.url if product.image else None,
             "price": int(product.price),
             "discount": product.discount,
             "final_price": product.final_price,
+            "stock": product.stock,
             "status": product.status,
             "status_display": product.get_status_display(),
             "verification_summary": product.verification_summary,
@@ -57,9 +67,11 @@ def api_products(request):
         })
 
     return JsonResponse({
+        "status": "success",
         "role": role,
         "query": query,
         "count": len(items),
         "login_url": reverse("users:login"),
         "products": items,
+        "items": items,
     })
