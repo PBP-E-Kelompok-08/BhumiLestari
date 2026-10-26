@@ -113,6 +113,14 @@
 .co-error-text { color: #b3261e; margin: 4px 0 0; }
 .co-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; text-align: left; }
 .co-field input, .co-field textarea {
+    width: 100%; box-sizing: border-box;
     padding: 8px 10px; border: 1px solid #9aa89a; border-radius: 6px; font: inherit;
 }
+.co-field textarea { min-height: 110px; resize: vertical; }
 
+/* Pop up alamat di checkout */
+#addr-modal .cc-modal-box {
+    width: min(560px, 92vw);
+    box-sizing: border-box;
+    padding: 28px 32px;
+}
