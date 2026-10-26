@@ -1,13 +1,28 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Sum
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.checkout.models import Cart, CartItem
+from apps.checkout.models import Cart, CartItem, Order, OrderItem
 from apps.products.models import Product
+
+# Ongkir
+SHIPPING = {
+    "reguler": ("Reguler", 7000),
+    "kargo": ("Kargo", 15000),
+    "express": ("Express", 20000),
+    "same_day": ("Same Day", 30000),
+}
+PAYMENT = {
+    "ewallet": "E-Wallet",
+    "qris": "QRIS",
+    "transfer": "Transfer Bank",
+    "cod": "Cash On Delivery",
+}
 
 
 def get_cart_data(request):
@@ -58,10 +73,9 @@ def show_cart(request):
     return render(request, "cart.html", context)
 
 
-## Helper untuk endpoint JSON keranjang 
+# Helper endpoint JSON keranjang
 
 def _buyer_cart(request):
-    """Return (cart, None) kalau boleh, atau (None, JsonResponse error)."""
     if not request.user.is_authenticated:
         return None, JsonResponse({"ok": False, "error": "Silakan login dulu."}, status=401)
     if getattr(request.user, "role", None) != "buyer":
@@ -84,11 +98,10 @@ def _int_list(value):
     return [v for v in value if isinstance(v, int) and not isinstance(v, bool)]
 
 
-## Create 
+# Create
 
 @require_POST
 def add_to_cart(request, product_id):
-    # Tamu -> 401 JSON (bukan redirect HTML)
     if not request.user.is_authenticated:
         return JsonResponse({"ok": False, "error": "Silakan login dulu."}, status=401)
     if getattr(request.user, "role", None) != "buyer":
@@ -115,7 +128,7 @@ def add_to_cart(request, product_id):
     return JsonResponse({"ok": True, "cart_count": cart_count})
 
 
-## Update
+# Update
 
 @require_POST
 def update_cart_item(request, item_id):
@@ -143,7 +156,6 @@ def update_cart_item(request, item_id):
 
 @require_POST
 def select_cart_items(request):
-    """Terima daftar id yang TERCENTANG; sisanya otomatis jadi tidak tercentang."""
     cart, error = _buyer_cart(request)
     if error:
         return error
@@ -154,7 +166,7 @@ def select_cart_items(request):
     return JsonResponse({"ok": True})
 
 
-## Delete 
+# Delete
 
 @require_POST
 def delete_cart_items(request):
@@ -171,19 +183,123 @@ def delete_cart_items(request):
     return JsonResponse({"ok": True, "cart_count": cart_count})
 
 
-## Checkout (dummy}
+# Checkout
+
+def _create_order(user, recipient, phone, address, shipping_key, payment_key):
+    """Buat Order + OrderItem, kurangi stok, hapus item terpilih. Raise ValueError kalau gagal."""
+    with transaction.atomic():
+        cart = Cart.objects.get(user=user)
+        items = list(cart.items.filter(is_selected=True))
+        if not items:
+            raise ValueError("Tidak ada barang yang dipilih.")
+
+        products = {
+            p.pk: p
+            for p in Product.objects.select_for_update().filter(
+                pk__in=[ci.product_id for ci in items]
+            )
+        }
+
+        items_total = 0
+        for ci in items:
+            p = products[ci.product_id]
+            if p.status != "verified":
+                raise ValueError(f"{p.name} sudah tidak tersedia.")
+            if ci.quantity > p.stock:
+                raise ValueError(f"Stok {p.name} tidak mencukupi (sisa {p.stock}).")
+            items_total += int(p.final_price) * ci.quantity
+
+        shipping_cost = SHIPPING[shipping_key][1]
+        order = Order.objects.create(
+            buyer=user,
+            recipient_name=recipient,
+            phone=phone,
+            shipping_address=address,
+            shipping_method=shipping_key,
+            payment_method=payment_key,
+            shipping_cost=shipping_cost,
+            total_price=items_total + shipping_cost,
+        )
+
+        for ci in items:
+            p = products[ci.product_id]
+            OrderItem.objects.create(
+                order=order,
+                product=p,
+                product_name=p.name,
+                price=int(p.final_price),
+                quantity=ci.quantity,
+            )
+            p.stock -= ci.quantity
+            p.save(update_fields=["stock"])
+
+        cart.items.filter(pk__in=[ci.pk for ci in items]).delete()
+    return order
+
 
 @login_required(login_url="users:login")
 def show_checkout(request):
+    if getattr(request.user, "role", None) != "buyer":
+        return redirect("dashboard:show_dashboard_home")
+
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    items = list(cart.items.filter(is_selected=True).select_related("product"))
+    if not items:
+        return redirect("checkout:show_cart")
+
+    items_total = sum(int(ci.product.final_price) * ci.quantity for ci in items)
+    item_count = sum(ci.quantity for ci in items)
+
+    user = request.user
+    form = {
+        "recipient_name": getattr(user, "full_name", "") or "",
+        "phone": getattr(user, "phone", "") or "",
+        "address": getattr(user, "address", "") or "",
+        "shipping_method": "reguler",
+        "payment_method": "cod",
+    }
+    error = ""
+
+    if request.method == "POST":
+        form.update({
+            "recipient_name": request.POST.get("recipient_name", "").strip(),
+            "phone": request.POST.get("phone", "").strip(),
+            "address": request.POST.get("address", "").strip(),
+            "shipping_method": request.POST.get("shipping_method", ""),
+            "payment_method": request.POST.get("payment_method", ""),
+        })
+        if not (form["recipient_name"] and form["phone"] and form["address"]):
+            error = "Lengkapi alamat pengiriman dulu."
+        elif form["shipping_method"] not in SHIPPING or form["payment_method"] not in PAYMENT:
+            error = "Pilih opsi pengiriman dan metode pembayaran."
+        else:
+            try:
+                _create_order(
+                    request.user, form["recipient_name"], form["phone"], form["address"],
+                    form["shipping_method"], form["payment_method"],
+                )
+            except ValueError as exc:
+                error = str(exc)
+            else:
+                return redirect("checkout:order_list")
+
+        if form["shipping_method"] not in SHIPPING:
+            form["shipping_method"] = "reguler"
+        if form["payment_method"] not in PAYMENT:
+            form["payment_method"] = "cod"
+
+    shipping_cost = SHIPPING[form["shipping_method"]][1]
     context = {
-        "recipient_name": "Nama Penerima",
-        "address": "Alamat pengiriman",
-        "shipping_options": ["Reguler", "Kargo", "Express", "Same Day"],
-        "payment_options": ["E-Wallet", "QRIS", "Transfer Bank", "Cash On Delivery"],
-        "items_total": 18000,
-        "shipping_cost": 5000,
-        "grand_total": 23000,
-        "item_count": 2,
+        "form": form,
+        "error": error,
+        "shipping_options": [
+            {"key": k, "label": v[0], "cost": v[1]} for k, v in SHIPPING.items()
+        ],
+        "payment_options": [{"key": k, "label": v} for k, v in PAYMENT.items()],
+        "items_total": items_total,
+        "item_count": item_count,
+        "shipping_cost": shipping_cost,
+        "grand_total": items_total + shipping_cost,
     }
     return render(request, "checkout.html", context)
 

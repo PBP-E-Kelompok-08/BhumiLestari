@@ -94,7 +94,7 @@
 
 
 
-/* ---------- Checkout ---------- */
+/* Checkout */
 .checkout-form { max-width: 760px; margin: 0 auto; }
 .co-row-between { display: flex; justify-content: space-between; }
 .co-link { background: none; border: 0; font-weight: 700; cursor: pointer; }
@@ -108,4 +108,11 @@
 }
 .pill-wide label { border-radius: 20px; }
 .pill input:checked + label { background: var(--cc-dark); color: #fff; }
+
+.co-error { color: #b3261e; }
+.co-error-text { color: #b3261e; margin: 4px 0 0; }
+.co-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; text-align: left; }
+.co-field input, .co-field textarea {
+    padding: 8px 10px; border: 1px solid #9aa89a; border-radius: 6px; font: inherit;
+}
 
