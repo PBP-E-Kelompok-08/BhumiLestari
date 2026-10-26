@@ -9,6 +9,7 @@
 
 {% block content %}
 <main class="cc-page">
+    {% csrf_token %}
     <h1 class="cc-title">Keranjang</h1>
 
     <div class="cart-layout">
@@ -16,7 +17,7 @@
             <div class="cc-card cart-header">
                 <label class="cart-check-all">
                     <input type="checkbox" id="select-all">
-                    <span>Pilih Semua <small>(<span id="select-count">{{ item_count }}</span>)</small></span>
+                    <span>Pilih Semua <small>(<span id="select-count">{{ line_count }}</span>)</small></span>
                 </label>
                 <button type="button" class="cart-delete-btn">Hapus</button>
             </div>
@@ -29,15 +30,19 @@
                 </label>
 
                 {% for item in store.items %}
-                <div class="cart-item" data-item-id="{{ item.id }}" data-price="{{ item.price }}">
+                <div class="cart-item" data-item-id="{{ item.id }}" data-price="{{ item.final_price }}" data-stock="{{ item.stock }}">
                     <input type="checkbox" class="item-check" {% if item.selected %}checked{% endif %}>
-                    <img class="cart-item-img" src="{% static item.image %}" alt="{{ item.name }}">
+                    {% if item.image_url %}
+                    <img class="cart-item-img" src="{{ item.image_url }}" alt="{{ item.name }}">
+                    {% else %}
+                    <div class="cart-item-img"></div>
+                    {% endif %}
                     <div class="cart-item-info">
                         <p class="cart-item-name">{{ item.name }}</p>
                         <p class="cart-item-var">Variations: {{ item.variation }}</p>
                     </div>
                     <div class="cart-item-right">
-                        <p class="cart-item-price">Rp. {{ item.price|rupiah }}</p>
+                        <p class="cart-item-price">Rp. {{ item.final_price|rupiah }}</p>
                         <div class="qty-stepper">
                             <button type="button" class="qty-btn qty-minus">&minus;</button>
                             <span class="qty-value">{{ item.quantity }}</span>
@@ -72,5 +77,5 @@
         </div>
     </div>
 </div>
-<script src="{% static 'js/cart.js' %}?v=8"></script>
+<script src="{% static 'js/cart.js' %}?v=9"></script>
 {% endblock content %}

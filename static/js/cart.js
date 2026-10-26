@@ -6,6 +6,8 @@
     var checkoutCount = document.getElementById('checkout-count');
     var checkoutBtn = document.getElementById('checkout-btn');
     var deleteBtn = document.querySelector('.cart-delete-btn');
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    var csrf = csrfInput ? csrfInput.value : '';
 
     function rupiah(n) {
         return 'Rp. ' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -18,6 +20,16 @@
     function setState(box, all, none) {
         box.checked = all;
         box.indeterminate = !all && !none;
+    }
+
+    function post(url, data) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+            body: JSON.stringify(data || {})
+        }).then(function (res) {
+            return res.json();
+        });
     }
 
     function syncChecks() {
@@ -50,6 +62,24 @@
         recalc();
     }
 
+    // Simpan checklist ke database
+    function saveSelection() {
+        var ids = [];
+        document.querySelectorAll('.cart-item').forEach(function (row) {
+            if (row.querySelector('.item-check').checked) {
+                ids.push(parseInt(row.dataset.itemId, 10));
+            }
+        });
+        post('/cart/select/', { selected_ids: ids }).catch(function (err) {
+            console.error('Gagal menyimpan centang:', err);
+        });
+    }
+
+    function refreshAndSave() {
+        refresh();
+        saveSelection();
+    }
+
     function showEmptyIfNeeded() {
         if (document.querySelector('.cart-item')) return;
         var card = document.createElement('div');
@@ -62,7 +92,7 @@
         document.querySelectorAll('.store-check, .item-check').forEach(function (box) {
             box.checked = selectAll.checked;
         });
-        refresh();
+        refreshAndSave();
     });
 
     document.querySelectorAll('.cart-store').forEach(function (store) {
@@ -70,12 +100,12 @@
             store.querySelectorAll('.item-check').forEach(function (box) {
                 box.checked = e.target.checked;
             });
-            refresh();
+            refreshAndSave();
         });
     });
 
     document.querySelectorAll('.item-check').forEach(function (box) {
-        box.addEventListener('change', refresh);
+        box.addEventListener('change', refreshAndSave);
     });
 
     if (checkoutBtn) {
@@ -84,7 +114,7 @@
         });
     }
 
-    // Tombol Hapus dengan pop up konfirmasi
+    // Pop up konfirmasi
     var modal = document.getElementById('delete-modal');
     var modalText = document.getElementById('delete-modal-text');
     var pendingRows = [];
@@ -119,8 +149,20 @@
 
         document.getElementById('delete-cancel').addEventListener('click', closeModal);
         document.getElementById('delete-confirm').addEventListener('click', function () {
-            deleteRows(pendingRows);
+            var rows = pendingRows;
+            var ids = rows.map(function (row) { return parseInt(row.dataset.itemId, 10); });
             closeModal();
+
+            post('/cart/delete/', { ids: ids }).then(function (data) {
+                if (data.ok) {
+                    deleteRows(rows);
+                } else {
+                    alert(data.error || 'Gagal menghapus dari keranjang.');
+                }
+            }).catch(function (err) {
+                console.error('Gagal menghapus:', err);
+                alert('Terjadi kesalahan. Coba lagi.');
+            });
         });
         modal.addEventListener('click', function (e) {
             if (e.target === modal) closeModal();
@@ -130,19 +172,40 @@
         });
     }
 
-    // Tombol jumlah + dan -
     function updateStepper(row) {
         var qty = parseInt(row.querySelector('.qty-value').textContent, 10) || 1;
+        var stock = parseInt(row.dataset.stock, 10);
         row.querySelector('.qty-minus').disabled = qty <= 1;
+        row.querySelector('.qty-plus').disabled = !isNaN(stock) && qty >= stock;
     }
 
     document.querySelectorAll('.cart-item').forEach(function (row) {
         var valueEl = row.querySelector('.qty-value');
 
-        function setQty(n) {
-            valueEl.textContent = Math.max(1, n);
+        function render(n) {
+            valueEl.textContent = n;
             updateStepper(row);
             recalc();
+        }
+
+        function setQty(n) {
+            var old = parseInt(valueEl.textContent, 10) || 1;
+            n = Math.max(1, n);
+            if (n === old) return;
+
+            render(n); // tampil dulu, lalu simpan; kalau ditolak server, balik ke angka lama
+            post('/cart/update/' + row.dataset.itemId + '/', { quantity: n })
+                .then(function (data) {
+                    if (!data.ok) {
+                        render(old);
+                        alert(data.error || 'Gagal mengubah jumlah.');
+                    }
+                })
+                .catch(function (err) {
+                    console.error('Gagal mengubah jumlah:', err);
+                    render(old);
+                    alert('Terjadi kesalahan. Coba lagi.');
+                });
         }
 
         row.querySelector('.qty-minus').addEventListener('click', function () {
