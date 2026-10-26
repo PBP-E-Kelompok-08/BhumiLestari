@@ -4,7 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Sum
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.checkout.models import Cart, CartItem, Order, OrderItem
@@ -304,9 +305,108 @@ def show_checkout(request):
     return render(request, "checkout.html", context)
 
 
+# Pesanan (buyer dan seller)
+
+STATUS_VIEW = {
+    "diproses": ("baru", "Baru"),
+    "dikirim": ("dikirim", "Dikirim"),
+    "selesai": ("selesai", "Selesai"),
+}
+
+
+def _role_orders(user):
+    """Buyer: pesanan miliknya. Seller: pesanan yang berisi produk tokonya."""
+    qs = Order.objects.select_related("buyer").prefetch_related("items__product__seller")
+    role = getattr(user, "role", None)
+    if role == "buyer":
+        return qs.filter(buyer=user)
+    if role == "seller":
+        return qs.filter(items__product__seller__user=user).distinct()
+    return None
+
+
+def _visible_items(order, user):
+    """Seller hanya melihat barang dari tokonya sendiri."""
+    items = list(order.items.all())
+    if getattr(user, "role", None) == "seller":
+        items = [i for i in items if i.product and i.product.seller.user_id == user.id]
+    return items
+
+
+@login_required(login_url="users:login")
 def order_list(request):
-    return render(request, "order_list.html")
+    base = _role_orders(request.user)
+    if base is None:
+        return redirect("dashboard:show_dashboard_home")
+
+    is_seller = request.user.role == "seller"
+    now = timezone.now()
+    stats = {
+        "baru": base.filter(status="diproses").count(),
+        "dikirim": base.filter(status="dikirim").count(),
+        "selesai": base.filter(
+            status="selesai", created_at__year=now.year, created_at__month=now.month
+        ).count(),
+    }
+
+    active = request.GET.get("status", "")
+    status_map = {"baru": "diproses", "dikirim": "dikirim", "selesai": "selesai"}
+    orders = base.filter(status=status_map[active]) if active in status_map else base
+
+    rows = []
+    for o in orders.order_by("-created_at"):
+        items = _visible_items(o, request.user)
+        if is_seller:
+            party = o.recipient_name
+            total = sum(i.price * i.quantity for i in items)
+        else:
+            party = ", ".join(sorted({i.product.seller.store_name for i in items if i.product})) or "-"
+            total = o.total_price
+        key, label = STATUS_VIEW.get(o.status, ("baru", o.status))
+        rows.append({
+            "order": o,
+            "party": party,
+            "products": ", ".join(f"{i.product_name} ({i.quantity})" for i in items),
+            "total": total,
+            "badge": key,
+            "label": label,
+        })
+
+    return render(request, "order_list.html", {
+        "rows": rows,
+        "stats": stats,
+        "active": active,
+        "is_seller": is_seller,
+    })
 
 
-def order_detail(request):
-    return render(request, "order_detail.html")
+@login_required(login_url="users:login")
+def order_detail(request, order_id):
+    base = _role_orders(request.user)
+    if base is None:
+        return redirect("dashboard:show_dashboard_home")
+    order = get_object_or_404(base, pk=order_id)
+    is_seller = request.user.role == "seller"
+
+    if request.method == "POST":
+        aksi = request.POST.get("aksi")
+        if is_seller and aksi == "terima" and order.status == "diproses":
+            order.status = "dikirim"
+            order.save(update_fields=["status"])
+        elif not is_seller and aksi == "selesai" and order.status == "dikirim":
+            order.status = "selesai"
+            order.save(update_fields=["status"])
+        return redirect("checkout:order_detail", order_id=order.pk)
+
+    items = _visible_items(order, request.user)
+    subtotal = sum(i.price * i.quantity for i in items)
+    key, label = STATUS_VIEW.get(order.status, ("baru", order.status))
+    return render(request, "order_detail.html", {
+        "order": order,
+        "items": items,
+        "subtotal": subtotal,
+        "total": subtotal if is_seller else order.total_price,
+        "is_seller": is_seller,
+        "badge": key,
+        "label": label,
+    })
