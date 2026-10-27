@@ -1,6 +1,8 @@
 import shutil
 import tempfile
 import uuid
+import io
+from PIL import Image
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -306,3 +308,53 @@ class IntegrasiTest(DasarTest):
     def test_pernah_membeli_masih_stub(self):
         self.assertTrue(integrations.STUB_PEMBELIAN)
         self.assertTrue(integrations.pernah_membeli(self.b1, self.produk.pk))
+
+
+class SecurityAndValidationTest(DasarTest):
+    @staticmethod
+    def _png_asli():
+        buf = io.BytesIO()
+        Image.new("RGB", (1, 1), (255, 255, 255)).save(buf, format="PNG")
+        return buf.getvalue()
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+        cache.clear()
+        self.client.force_login(self.b1)
+        self.url = reverse("reviews:tambah", args=[self.toko.id])
+
+    def test_rate_limiter_memblokir_spam(self):
+        # 10 request diizinkan, request ke-11 diblokir dengan 429
+        for i in range(10):
+            p = buat_produk(self.toko, f"Produk {i}")
+            r = self.client.post(self.url, {"rating": "5", "komentar": "Ok", "produk_id": str(p.pk)})
+            self.assertEqual(r.status_code, 201)
+
+        p11 = buat_produk(self.toko, "Produk 11")
+        r11 = self.client.post(self.url, {"rating": "5", "komentar": "Spam", "produk_id": str(p11.pk)})
+        self.assertEqual(r11.status_code, 429)
+        self.assertIn("Terlalu banyak permintaan", r11.json()["error"])
+
+    def test_validasi_foto_palsu_ditolak_magic_bytes(self):
+        # File teks yang disamarkan dengan MIME image/png
+        palsu = SimpleUploadedFile("script.png", b"<?php echo 1; ?>", content_type="image/png")
+        p = buat_produk(self.toko, "Produk Foto Palsu")
+        r = self.client.post(
+            self.url,
+            {"rating": "5", "komentar": "Tes foto", "produk_id": str(p.pk), "foto": palsu},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("bukan gambar yang valid", r.json()["error"])
+
+    def test_validasi_foto_asli_diterima(self):
+        asli = SimpleUploadedFile("valid.png", self._png_asli(), content_type="image/png")
+        p = buat_produk(self.toko, "Produk Foto Asli")
+        r = self.client.post(
+            self.url,
+            {"rating": "5", "komentar": "Tes foto asli", "produk_id": str(p.pk), "foto": asli},
+        )
+        self.assertEqual(r.status_code, 201)
+        u = UlasanToko.objects.get(produk=p)
+        self.assertEqual(u.foto.count(), 1)
+
