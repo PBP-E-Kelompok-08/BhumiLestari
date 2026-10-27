@@ -51,6 +51,7 @@
     width: 5rem;
     height: 5rem;
     border-radius: 50%;
+    object-fit: cover;
 }
 
 .logo-row .button {
@@ -78,4 +79,99 @@
     .settings-card-left {
         gap: 0;
     }
+}
+
+.info-list { margin: 0 0 20px; }
+.info-list dt { font-size: 0.9rem; opacity: 0.7; margin-top: 14px; }
+.info-list dd { margin: 4px 0 0; font-weight: 500; }
+.empty-note { font-style: italic; opacity: 0.65; font-weight: 400; }
+
+dialog.modal {
+    border: none;
+    border-radius: 12px;
+    padding: 0;
+    width: min(460px, 92vw);
+    margin: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+dialog.modal::backdrop {
+    background: rgba(40, 50, 40, 0.55);
+}
+dialog.modal[open] { animation: modal-pop 0.18s ease-out; }
+@keyframes modal-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+.modal-body { padding: 1.75rem; }
+.modal-body h2 { margin: 0 0 0.5rem; }
+
+.modal-body label {
+    display: block;
+    margin-top: 0.9rem;
+    font-size: 0.9rem;
+}
+.modal-body input[type="text"],
+.modal-body input[type="tel"],
+.modal-body input[type="password"],
+.modal-body select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem;
+    border: none;
+    background: #f1f1f1;
+    font-family: "Prompt";
+    font-size: 0.95rem;
+}
+.modal-body input:focus,
+.modal-body select:focus {
+    outline: 2px solid var(--secondpaper);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+}
+.modal-actions button {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+    font-family: "Prompt";
+    font-size: 0.9rem;
+}
+.modal-actions .btn-cancel {
+    background: #e6e6e6;
+    color: #333;
+}
+
+/* Daftar metode pembayaran */
+.payment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #eee;
+}
+.payment-item form { margin: 0; }
+.payment-item button { margin-top: 0; }
+
+.button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.settings-card .btn-danger,
+.modal-actions .btn-danger {
+    background: #b3261e;
+    color: #fff;
+}
+.settings-card .btn-danger:hover,
+.modal-actions .btn-danger:hover {
+    background: #8f1d17;
 }

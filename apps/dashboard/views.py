@@ -1,9 +1,10 @@
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from apps.products.models import Product
 from apps.products.views import get_role, cek_status
+from apps.reviews.services import laporan_ulasan, rating_per_produk, ringkasan_ulasan_toko
 
 def show_dashboard_home(request):
     role = get_role(request.user)
@@ -15,7 +16,7 @@ def show_dashboard_home(request):
         elif role == "seller":
             name = request.user.seller_profile.store_name
         elif role == "buyer":
-            name = request.user.full_name
+            name = request.user.username
 
     return render(request, "dashboard_home.html", {"role": role, "name": name})
 
@@ -45,8 +46,12 @@ def api_products(request):
 
     products = products.order_by("-created_at")
 
+    products = list(products)
+    rating = rating_per_produk(p.pk for p in products)  # 1 query untuk semua kartu
+
     items = []
     for product in products:
+        stat = rating.get(product.pk)
         items.append({
             "id": str(product.pk),
             "product_id": str(product.pk),
@@ -63,6 +68,11 @@ def api_products(request):
             "verification_summary": product.verification_summary,
             "edit_url": reverse("products:edit_product", args=[product.pk]),
             "delete_url": reverse("products:delete_product", args=[product.pk]),
+            "toko_id": product.seller_id,
+            "review_url": reverse("reviews:halaman_toko", args=[product.seller_id]) + f"?produk={product.pk}",
+            "rating": stat["rata"] if stat else None,
+            "rating_teks": stat["rata_teks"] if stat else None,
+            "jumlah_ulasan": stat["jumlah"] if stat else 0,
         })
 
     return JsonResponse({
@@ -73,4 +83,38 @@ def api_products(request):
         "login_url": reverse("users:login"),
         "products": items,
         "items": items,
+    })
+
+def _alihkan_bila_tak_berhak(request, role_diizinkan):
+    """None bila boleh; selain itu redirect (guest -> login, role lain -> beranda)."""
+    role = get_role(request.user)
+    if role == "guest":
+        return redirect("users:login")
+    if role not in role_diizinkan:
+        return redirect("dashboard:show_dashboard_home")
+    return None
+
+
+def seller_summary(request):
+    tolak = _alihkan_bila_tak_berhak(request, {"seller"})
+    if tolak:
+        return tolak
+    profile = getattr(request.user, "seller_profile", None)
+    if profile is None:
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "seller_summary.html", {
+        "name": profile.store_name,
+        "ulasan": ringkasan_ulasan_toko(profile),
+    })
+
+def sales_report(request):
+    tolak = _alihkan_bila_tak_berhak(request, {"seller", "admin"})
+    if tolak:
+        return tolak
+    role = get_role(request.user)
+    profile = getattr(request.user, "seller_profile", None)
+    if role == "seller" and profile is None:
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "sales_report.html", {
+        "ulasan": laporan_ulasan(role, toko=profile, periode=request.GET.get("periode")),
     })

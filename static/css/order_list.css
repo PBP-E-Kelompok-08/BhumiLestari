@@ -1,0 +1,110 @@
+.trx-page {
+  padding: 2rem;
+  background: #eaf3d1;
+  color: #4d6b5e;
+  font-family: "Prompt", sans-serif;
+}
+
+.page-title {
+  margin-bottom: 2rem;
+  font-family: "Changa", sans-serif;
+  font-size: 2.25rem;
+}
+
+.stats {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.stat {
+  flex: 1;
+  padding: 1.5rem;
+  background: white;
+}
+
+.stat span {
+  display: block;
+}
+
+.stat strong {
+  font-family: "Changa", sans-serif;
+  font-size: 2rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.filter {
+  padding: 0.8rem 1.5rem;
+  background: #d9d9d9;
+  border-radius: 50px;
+  color: #4d6b5e;
+  text-decoration: none;
+}
+
+.filter.is-active {
+  background: #4d6b5e;
+  color: white;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: white;
+}
+
+.orders {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.orders th,
+.orders td {
+  padding: 1.25rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.orders th {
+  font-family: "Changa", sans-serif;
+}
+
+.orders td {
+  border-top: 1px solid #eef2e4;
+}
+
+.orders a {
+  color: #4d6b5e;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.35rem 1rem;
+  border-radius: 50px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.badge-baru {
+  background: #f7c85a;
+}
+
+.badge-dikirim {
+  background: #a9bb78;
+}
+
+.badge-selesai {
+  background: #d9d9d9;
+}
+
+@media (max-width: 600px) {
+  .trx-page {
+    padding: 1.25rem 1rem;
+  }
+
+  .stats {
+    flex-direction: column;
+  }
+}

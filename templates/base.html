@@ -35,19 +35,15 @@
                         aria-label="Cari produk Anda di sini...">
                 </form>
 
-                <img class="notif" src="{% static 'img/notif.png' %}" alt="Notification">
                 <img class="question" src="{% static 'img/question.png' %}" alt="Question">
 
                 {% if user.is_authenticated %}
                 <div class="nav-user-menu">
                     <button type="button" class="nav-user" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">
-                        <span class="nav-avatar">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <circle cx="12" cy="9" r="4"/>
-                                <path d="M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
-                            </svg>
-                        </span>
-                        <span class="nav-username">{{ user.get_full_name|default:user.get_username }}</span>
+                        <img class="nav-avatar"
+                     src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                     alt="Logo akun">
+                        <span class="nav-username">{{ user.seller_profile.store_name|default:user.username }}</span>
                     </button>
 
                     <div class="nav-dropdown" id="userMenu" hidden>

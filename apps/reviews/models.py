@@ -24,9 +24,9 @@ class UlasanToko(models.Model):
     pembeli = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ulasan_dibuat"
     )
-    # TODO: setelah model Produk ada, ganti jadi
-    #   produk = models.ForeignKey("products.Product", null=True, on_delete=models.SET_NULL)
-    produk_id = models.PositiveIntegerField()
+    produk = models.ForeignKey(
+        "products.Product", null=True, blank=True, on_delete=models.SET_NULL, related_name="ulasan"
+    )
     nama_produk = models.CharField(max_length=150)  # salinan nama, tetap tampil jika produk dihapus
     rating = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)]
@@ -43,12 +43,12 @@ class UlasanToko(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["pembeli", "produk_id"], name="satu_ulasan_per_produk_per_pembeli"
+                fields=["pembeli", "produk"], name="satu_ulasan_per_produk_per_pembeli"
             )
         ]
         indexes = [
             models.Index(fields=["toko", "-created_at"]),
-            models.Index(fields=["toko", "produk_id"]),
+            models.Index(fields=["toko", "produk"]),
         ]
         verbose_name = "Ulasan Toko"
         verbose_name_plural = "Ulasan Toko"

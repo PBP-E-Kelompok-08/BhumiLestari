@@ -10,67 +10,232 @@
 <main class="settings">
     <h1>Pengaturan Akun</h1>
 
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+            <li class="message {{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
     <div class="settings-card-left">
+        <!-- ========== INFORMASI AKUN (mode tampil) ========== -->
         <section class="settings-card">
             <h2>Informasi Akun</h2>
 
-            <form method="post" action="#" enctype="multipart/form-data">
-                {% csrf_token %}
+            <div class="logo-row">
+                <img class="logo"
+                     src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                     alt="Logo akun">
+            </div>
 
-                <div class="logo-row">
-                    <img class="logo" src="{% static 'img/user.png' %}" alt="Logo akun">
-                    <label class="button" for="logo">+ Ganti Logo Akun</label>
-                    <input type="file" id="logo" name="logo">
-                </div>
+            <dl class="info-list">
+                <dt>{% if is_seller %}Nama Toko{% else %}Nama Lengkap{% endif %}</dt>
+                <dd>{{ current_name|default:user.username }}</dd>
 
-                <label for="store_name">Nama Akun</label>
-                <input type="text" id="store_name" name="store_name">
+                <dt>Email Akun</dt>
+                <dd>{{ masked_email }}</dd>
 
-                <label for="email">Email Akun</label>
-                <input type="email" id="email" name="email">
+                <dt>Nomor Telepon</dt>
+                <dd>
+                    {% if user.phone %}{{ user.phone }}
+                    {% else %}<span class="empty-note">Belum ada nomor telepon. Harap isi nomor telepon Anda.</span>{% endif %}
+                </dd>
 
-                <label for="phone">Nomor Telepon</label>
-                <input type="tel" id="phone" name="phone">
+                <dt>Alamat</dt>
+                <dd>
+                    {% if user.address %}{{ user.address }}
+                    {% else %}<span class="empty-note">Belum ada alamat. Harap isi alamat Anda.</span>{% endif %}
+                </dd>
+            </dl>
 
-                <label for="address">Alamat</label>
-                <input type="text" id="address" name="address">
-
-                <button type="submit">Simpan Perubahan</button>
-            </form>
+            <div class="button-row">
+                <button type="button" data-open="modal-profile">Edit Profile</button>
+                <button type="button" class="btn-danger" data-open="modal-delete">Hapus Akun</button>
+            </div>
         </section>
 
         <div class="settings-card-right">
+            <!-- ========== PASSWORD (mode tampil) ========== -->
             <section class="settings-card">
                 <h2>Ganti Password</h2>
 
-                <form method="post" action="#">
-                    {% csrf_token %}
+                <dl class="info-list">
+                    <dt>Password</dt>
+                    <dd>********</dd>
+                </dl>
 
-                    <label for="old_password">Password Lama</label>
-                    <input type="password" id="old_password" name="old_password">
-
-                    <label for="new_password">Password Baru</label>
-                    <input type="password" id="new_password" name="new_password">
-
-                    <label for="confirm_password">Konfirmasi Password Baru</label>
-                    <input type="password" id="confirm_password" name="confirm_password">
-
-                    <button type="submit">Perbarui Password</button>
-                </form>
+                <button type="button" data-open="modal-password">Perbarui Password</button>
             </section>
 
+            <!-- ========== PEMBAYARAN (mode tampil) ========== -->
             <section class="settings-card">
-                <h2>Pembayaran</h2>
+                <h2>{% if is_seller %}Rekening Pencairan Dana{% else %}Pembayaran{% endif %}</h2>
 
-                <div class="payment-method">
-                    <input type="text" name="bank_name"> 
-                    {% comment %} Ini nanti dibuat dropdown juga boleh Dhil {% endcomment %}
-                    <input type="text" name="account_number">
+                {% for pm in payment_methods %}
+                <div class="payment-item">
+                    <span>{{ pm.get_method_type_display }} · {{ pm.provider }} · {{ pm.masked_number }}</span>
+                    <form method="post" onsubmit="return confirm('Hapus metode pembayaran ini?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_payment">
+                        <input type="hidden" name="payment_id" value="{{ pm.id }}">
+                        <button type="submit">Hapus</button>
+                    </form>
                 </div>
+                {% empty %}
+                <p class="empty-note">
+                    Belum ada rekening atau e-wallet. Harap tambahkan metode pembayaran Anda.
+                </p>
+                {% endfor %}
 
-                <button type="submit">+ Tambah Metode Pembayaran</button>
+                <button type="button" data-open="modal-payment">+ Tambah Metode Pembayaran</button>
             </section>
         </div>
     </div>
 </main>
+
+<!-- ================= MODAL: EDIT PROFILE ================= -->
+<dialog id="modal-profile" class="modal">
+    <div class="modal-body">
+        <h2>Edit Profile</h2>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="profile">
+
+            <div class="logo-row">
+                <img class="logo" id="logo-preview"
+                     src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                     alt="Logo akun">
+                <label class="button" for="logo">
+                    Pilih Gambar
+                </label>
+                <input type="file" id="logo" name="logo" accept="image/*">
+            </div>
+
+            <label for="name">{% if is_seller %}Nama Toko{% else %}Nama Lengkap{% endif %}</label>
+            <input type="text" id="name" name="name" value="{{ current_name }}" required>
+
+            <label for="phone">Nomor Telepon</label>
+            <input type="tel" id="phone" name="phone" value="{{ user.phone }}">
+
+            <label for="address">Alamat</label>
+            <input type="text" id="address" name="address" value="{{ user.address }}">
+
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" data-close>Batal</button>
+                <button type="submit">Simpan</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- ================= MODAL: GANTI PASSWORD ================= -->
+<dialog id="modal-password" class="modal">
+    <div class="modal-body">
+        <h2>Perbarui Password</h2>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="password">
+
+            <label for="old_password">Password Lama</label>
+            <input type="password" id="old_password" name="old_password" required>
+
+            <label for="new_password">Password Baru</label>
+            <input type="password" id="new_password" name="new_password" required>
+
+            <label for="confirm_password">Konfirmasi Password Baru</label>
+            <input type="password" id="confirm_password" name="confirm_password" required>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" data-close>Batal</button>
+                <button type="submit">Perbarui</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- ================= MODAL: TAMBAH PEMBAYARAN ================= -->
+<dialog id="modal-payment" class="modal">
+    <div class="modal-body">
+        <h2>Tambah Metode Pembayaran</h2>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_payment">
+
+            <label for="method_type">Jenis</label>
+            <select id="method_type" name="method_type" required>
+                <option value="bank">Bank</option>
+                <option value="ewallet">E-Wallet</option>
+                <option value="qris">QRIS</option>
+            </select>
+
+            <label for="provider">Nama Bank / E-Wallet</label>
+            <input type="text" id="provider" name="provider" placeholder="BCA / GoPay / dst." required>
+
+            <label for="account_number">Nomor Rekening / HP</label>
+            <input type="text" id="account_number" name="account_number" required>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" data-close>Batal</button>
+                <button type="submit">Tambah</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- ================= MODAL: HAPUS AKUN ================= -->
+<dialog id="modal-delete" class="modal">
+    <div class="modal-body">
+        <h2>Hapus Akun?</h2>
+        <p>
+            Akun beserta
+            {% if is_seller %}profil toko dan {% endif %}data rekening/pembayaran
+            akan dihapus permanen dan tidak dapat dikembalikan.
+            Masukkan password Anda untuk melanjutkan.
+        </p>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_account">
+
+            <label for="delete_password">Password</label>
+            <input type="password" id="delete_password" name="password" required>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" data-close>Batal</button>
+                <button type="submit" class="btn-danger">Ya, Hapus Akun</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<script>
+// Buka modal
+document.querySelectorAll('[data-open]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.getElementById(btn.dataset.open).showModal();
+    });
+});
+// Tutup modal lewat tombol Batal
+document.querySelectorAll('[data-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        btn.closest('dialog').close();
+    });
+});
+// Tutup modal kalau klik area gelap di luar kotak
+document.querySelectorAll('dialog.modal').forEach(function (d) {
+    d.addEventListener('click', function (e) {
+        if (e.target === d) d.close();
+    });
+});
+// Preview logo
+document.getElementById('logo').addEventListener('change', function () {
+    var file = this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        document.getElementById('logo-preview').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+</script>
 {% endblock content %}
