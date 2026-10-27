@@ -5,7 +5,11 @@ from . import views
 app_name = "reviews"
 
 urlpatterns = [
-    # baca
+    # halaman HTML
+    path("halaman/toko/<int:toko_id>/", views.halaman_toko, name="halaman_toko"),
+    path("halaman/saya/", views.halaman_saya, name="halaman_saya"),
+    path("halaman/penjual/", views.halaman_penjual, name="halaman_penjual"),
+    # baca (JSON)
     path("toko/<int:toko_id>/", views.daftar_ulasan, name="daftar"),
     path("saya/", views.ulasan_saya, name="saya"),
     path("penjual/", views.ulasan_penjual, name="penjual"),

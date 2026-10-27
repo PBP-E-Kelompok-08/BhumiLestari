@@ -1,17 +1,33 @@
-from django.db.models import Avg, Count, Max
+from django.db.models import Avg, Count, Max, Q
 
 from .models import UlasanToko
 
 
 def _ringkas(qs):
-    agg = qs.aggregate(rata=Avg("rating"), total=Count("id"))
-    distribusi = {r: 0 for r in (5, 4, 3, 2, 1)}
-    for row in qs.order_by().values("rating").annotate(n=Count("id")):
-        distribusi[row["rating"]] = row["n"]
+    """
+    Kalkulasi agregasi rata-rata rating, total ulasan, dan distribusi bintang 1-5.
+    Dioptimalkan menjadi 1 single database query menggunakan conditional aggregation
+    (COUNT CASE WHEN), memangkas round-trip database hingga 50%.
+    """
+    data = qs.aggregate(
+        rata=Avg("rating"),
+        total=Count("id"),
+        b5=Count("id", filter=Q(rating=5)),
+        b4=Count("id", filter=Q(rating=4)),
+        b3=Count("id", filter=Q(rating=3)),
+        b2=Count("id", filter=Q(rating=2)),
+        b1=Count("id", filter=Q(rating=1)),
+    )
     return {
-        "rata_rata": round(agg["rata"] or 0, 1),
-        "total": agg["total"],
-        "distribusi": distribusi,
+        "rata_rata": round(data["rata"] or 0, 1),
+        "total": data["total"],
+        "distribusi": {
+            5: data["b5"],
+            4: data["b4"],
+            3: data["b3"],
+            2: data["b2"],
+            1: data["b1"],
+        },
     }
 
 
@@ -110,4 +126,26 @@ def laporan_ulasan(role, toko=None, periode=None):
         "judul_tabel": judul,
         "kolom_nama": kolom,
         "baris": baris,
+    }
+
+
+def rating_per_produk(produk_ids):
+    """Rating beberapa produk sekaligus (1 query), untuk kartu produk di katalog.
+
+    Return {produk_id: {"rata": 4.5, "rata_teks": "4,5", "jumlah": 12}}.
+    Produk tanpa ulasan tidak ada di hasil."""
+    baris = (
+        UlasanToko.objects.tampil()
+        .filter(produk_id__in=list(produk_ids))
+        .order_by()
+        .values("produk_id")
+        .annotate(rata=Avg("rating"), jumlah=Count("id"))
+    )
+    return {
+        r["produk_id"]: {
+            "rata": round(r["rata"], 1),
+            "rata_teks": format_rata(r["rata"]),
+            "jumlah": r["jumlah"],
+        }
+        for r in baris
     }

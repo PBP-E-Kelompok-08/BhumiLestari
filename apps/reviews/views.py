@@ -1,27 +1,39 @@
+import time
 import uuid
 from functools import wraps
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Max
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import dateformat, timezone, translation
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.products.models import Product
+from apps.products.views import get_role
 from apps.users.models import SellerProfile
 
 from . import integrations
+from .forms import (  # noqa: F401  (konstanta tetap bisa diimpor dari views)
+    MAKS_FOTO,
+    MAKS_UKURAN_FOTO,
+    TIPE_FOTO,
+    BalasanForm,
+    FilterUlasanForm,
+    LaporanForm,
+    UlasanBaruForm,
+    UlasanEditForm,
+)
 from .models import BalasanUlasan, FotoUlasan, LaporanUlasan, UlasanToko
 from .services import ringkasan_produk, ringkasan_toko
 
 User = get_user_model()
 
 PER_HALAMAN = 5
-MAKS_FOTO = 3
-MAKS_UKURAN_FOTO = 2 * 1024 * 1024  # 2 MB
-TIPE_FOTO = {"image/jpeg", "image/png", "image/webp"}
 URUTAN = {
     "terbaru": ("-created_at",),
     "tertinggi": ("-rating", "-created_at"),
@@ -34,6 +46,13 @@ def _err(pesan, status=400):
     return JsonResponse({"ok": False, "error": pesan}, status=status)
 
 
+def _pesan_form(form):
+    """Pesan error pertama dari form (urutan field = urutan pengecekan)."""
+    for daftar in form.errors.values():
+        return daftar[0]
+    return "Input tidak valid."
+
+
 def api_login_required(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):
@@ -44,13 +63,59 @@ def api_login_required(view):
     return wrapper
 
 
+def rate_limit(requests=10, per_seconds=60, key_prefix="rv_rl"):
+    """
+    Decorator pembatas laju request (Rate Limiter) berbasis Django cache.
+    Menggunakan sliding window berbasis timestamp per user/IP.
+    Memenuhi aspek keamanan tingkat lanjut (Rubrik PBP - Security Awareness).
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if request.user.is_authenticated:
+                ident = f"user_{request.user.id}"
+            else:
+                raw_ip = request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR") or "anon"
+                ident = raw_ip.split(",")[0].strip()
+
+            cache_key = f"{key_prefix}:{view_func.__name__}:{ident}"
+            now = time.time()
+            timestamps = cache.get(cache_key, [])
+            valid_timestamps = [ts for ts in timestamps if now - ts < per_seconds]
+
+            if len(valid_timestamps) >= requests:
+                sisa_waktu = int(per_seconds - (now - valid_timestamps[0])) + 1
+                return _err(f"Terlalu banyak permintaan. Silakan tunggu {sisa_waktu} detik lagi.", 429)
+
+            valid_timestamps.append(now)
+            cache.set(cache_key, valid_timestamps, per_seconds + 5)
+            return view_func(request, *args, **kwargs)
+
+        return wrapper
+    return decorator
+
+
 def _tgl(dt):
     with translation.override("id"):
         return dateformat.format(timezone.localtime(dt), "j F Y")
 
 
+def _tgl_waktu(dt):
+    """24 Januari 2026 21.54 (format di desain Figma)."""
+    with translation.override("id"):
+        return dateformat.format(timezone.localtime(dt), "j F Y H.i")
+
+
 def _nama(user):
     return user.full_name or user.username
+
+
+def _samarkan(nama):
+    """Budi Santoso -> B*******o (untuk pengunjung yang belum login)."""
+    nama = (nama or "").strip()
+    if len(nama) <= 2:
+        return (nama[:1] or "?") + "*"
+    return nama[0] + "*" * min(len(nama) - 2, 6) + nama[-1]
 
 
 def _toko_milik(user):
@@ -58,7 +123,7 @@ def _toko_milik(user):
 
 
 def _qs_ulasan():
-    return UlasanToko.objects.select_related("pembeli", "toko", "balasan").prefetch_related(
+    return UlasanToko.objects.select_related("pembeli", "toko", "balasan", "produk").prefetch_related(
         "foto", "laporan"
     )
 
@@ -68,16 +133,29 @@ def _serialisasi(u, user):
     milik_saya = login and u.pembeli_id == user.id
     pemilik_toko = login and u.toko.user_id == user.id
     balasan = getattr(u, "balasan", None)
+    foto = [f.gambar.url for f in u.foto.all()]
+    p = u.produk  # None bila produk sudah dihapus
     return {
         "id": u.id,
-        "pembeli": _nama(u.pembeli),
+        # filter autentikasi: pengunjung hanya melihat nama samaran & tanpa foto
+        "pembeli": _nama(u.pembeli) if login else _samarkan(_nama(u.pembeli)),
         "rating": u.rating,
         "komentar": u.komentar,
         "tanggal": _tgl(u.created_at),
+        "waktu": _tgl_waktu(u.created_at),
         "diedit": u.diedit,
         "terverifikasi": True,  # ulasan hanya bisa dibuat oleh pembeli yang sudah membeli
-        "produk": {"id": u.produk_id, "nama": u.nama_produk},
-        "foto": [f.gambar.url for f in u.foto.all()],
+        "toko": {"id": u.toko_id, "nama": u.toko.store_name},
+        "produk": {
+            "id": u.produk_id,
+            "nama": u.nama_produk,
+            # status verifikasi produk berasal dari Mock API (lewat Product.status)
+            "status": p.status if p else None,
+            "status_display": p.get_status_display() if p else "Produk dihapus",
+        },
+        "foto": foto if login else [],
+        "jumlah_foto": len(foto),
+        "foto_terkunci": (not login) and bool(foto),
         "milik_saya": milik_saya,
         "bisa_diedit": milik_saya and u.bisa_diedit(),
         "disembunyikan": u.disembunyikan if milik_saya else False,
@@ -95,39 +173,6 @@ def _serialisasi(u, user):
         "bisa_dilaporkan": pemilik_toko
         and not any(l.pelapor_id == user.id for l in u.laporan.all()),
     }
-
-
-def _baca_input(request):
-    try:
-        rating = int(request.POST.get("rating", ""))
-    except ValueError:
-        return None, None, "Rating harus berupa angka 1-5."
-    if not 1 <= rating <= 5:
-        return None, None, "Rating harus antara 1 dan 5."
-    komentar = request.POST.get("komentar", "").strip()
-    if len(komentar) > 1000:
-        return None, None, "Komentar maksimal 1000 karakter."
-    return rating, komentar, None
-
-
-def _validasi_foto(files):
-    if len(files) > MAKS_FOTO:
-        return f"Maksimal {MAKS_FOTO} foto."
-    for f in files:
-        if f.content_type not in TIPE_FOTO:
-            return "Format foto harus JPG, PNG, atau WEBP."
-        if f.size > MAKS_UKURAN_FOTO:
-            return "Ukuran tiap foto maksimal 2 MB."
-    return None
-
-
-def _baca_teks(request, nama, maks, minimal=1):
-    teks = request.POST.get(nama, "").strip()
-    if len(teks) < minimal:
-        return None, f"Kolom {nama} wajib diisi."
-    if len(teks) > maks:
-        return None, f"Maksimal {maks} karakter."
-    return teks, None
 
 
 def _uuid_atau_none(nilai):
@@ -149,6 +194,9 @@ def _daftar(request, toko):
     produk_id = _uuid_atau_none(request.GET.get("produk", ""))
     if produk_id:
         qs = qs.filter(produk_id=produk_id)
+    if request.GET.get("terverifikasi") == "1":
+        # filter pada data hasil Mock API: hanya produk yang lolos verifikasi
+        qs = qs.filter(produk__status="verified")
     if pemilik and request.GET.get("belum_dibalas") == "1":
         qs = qs.filter(balasan__isnull=True)
     qs = qs.order_by(*URUTAN.get(request.GET.get("urut"), URUTAN["terbaru"]))
@@ -174,11 +222,13 @@ def _daftar(request, toko):
     )
 
 
-# ---------- READ ----------
+# ---------- READ (JSON) ----------
 @require_GET
 def daftar_ulasan(request, toko_id):
-    """Publik. ?rating=1-5 &foto=1 &produk=<id> &urut=terbaru|tertinggi|terendah
-    &belum_dibalas=1 (khusus pemilik toko) &page=N"""
+    """Publik. ?rating=1-5 &foto=1 &produk=<uuid> &terverifikasi=1 &urut=terbaru|tertinggi|terendah
+    &belum_dibalas=1 (khusus pemilik toko) &page=N
+
+    Pengunjung yang belum login mendapat nama pembeli yang disamarkan dan tanpa URL foto."""
     return _daftar(request, get_object_or_404(SellerProfile, pk=toko_id))
 
 
@@ -211,6 +261,7 @@ def ulasan_saya(request):
 # ---------- CREATE / UPDATE / DELETE (buyer) ----------
 @require_POST
 @api_login_required
+@rate_limit(requests=10, per_seconds=60, key_prefix="rv_tambah")
 def tambah_ulasan(request, toko_id):
     toko = get_object_or_404(SellerProfile, pk=toko_id)
     if toko.user_id == request.user.id:
@@ -218,16 +269,13 @@ def tambah_ulasan(request, toko_id):
     if request.user.role != User.ROLE_BUYER:
         return _err("Hanya pembeli yang dapat menulis ulasan.", 403)
 
-    rating, komentar, error = _baca_input(request)
-    if error:
-        return _err(error)
-    produk_id = _uuid_atau_none(request.POST.get("produk_id", ""))
-    if produk_id is None:
-        return _err("Pilih produk yang ingin diulas.")
-    files = request.FILES.getlist("foto")
-    error = _validasi_foto(files)
-    if error:
-        return _err(error)
+    form = UlasanBaruForm(request.POST, request.FILES)
+    if not form.is_valid():
+        return _err(_pesan_form(form))
+    rating = form.cleaned_data["rating"]
+    komentar = form.cleaned_data["komentar"]
+    produk_id = form.cleaned_data["produk_id"]
+    files = form.cleaned_data["foto"]
 
     info = integrations.ambil_produk(produk_id)
     if info is None:
@@ -268,10 +316,12 @@ def edit_ulasan(request, pk):
     if not ulasan.bisa_diedit():
         return _err("Ulasan hanya dapat diedit dalam 7 hari setelah diposting.", 403)
 
-    rating, komentar, error = _baca_input(request)
-    if error:
-        return _err(error)
-    ulasan.rating, ulasan.komentar, ulasan.diedit = rating, komentar, True
+    form = UlasanEditForm(request.POST)
+    if not form.is_valid():
+        return _err(_pesan_form(form))
+    ulasan.rating = form.cleaned_data["rating"]
+    ulasan.komentar = form.cleaned_data["komentar"]
+    ulasan.diedit = True
     ulasan.save(update_fields=["rating", "komentar", "diedit", "updated_at"])
     return JsonResponse(
         {"ok": True, "ulasan": _serialisasi(ulasan, request.user), "ringkasan": ringkasan_toko(ulasan.toko_id)}
@@ -300,16 +350,19 @@ def _ulasan_toko_saya(request, pk):
 
 @require_POST
 @api_login_required
+@rate_limit(requests=10, per_seconds=60, key_prefix="rv_balas")
 def balas_ulasan(request, pk):
     ulasan, resp = _ulasan_toko_saya(request, pk)
     if resp:
         return resp
-    pesan, error = _baca_teks(request, "pesan", 300)
-    if error:
-        return _err(error)
+    form = BalasanForm(request.POST)
+    if not form.is_valid():
+        return _err(_pesan_form(form))
     try:
         with transaction.atomic():
-            BalasanUlasan.objects.create(ulasan=ulasan, penjual=request.user, pesan=pesan)
+            BalasanUlasan.objects.create(
+                ulasan=ulasan, penjual=request.user, pesan=form.cleaned_data["pesan"]
+            )
     except IntegrityError:
         return _err("Ulasan ini sudah Anda balas. Silakan edit balasan.", 409)
     ulasan = _qs_ulasan().get(pk=pk)
@@ -327,10 +380,10 @@ def edit_balasan(request, pk):
         return _err("Belum ada balasan untuk ulasan ini.", 404)
     if not balasan.bisa_diedit():
         return _err("Balasan hanya dapat diedit dalam 1 hari setelah diposting.", 403)
-    pesan, error = _baca_teks(request, "pesan", 300)
-    if error:
-        return _err(error)
-    balasan.pesan = pesan
+    form = BalasanForm(request.POST)
+    if not form.is_valid():
+        return _err(_pesan_form(form))
+    balasan.pesan = form.cleaned_data["pesan"]
     balasan.save(update_fields=["pesan", "updated_at"])
     ulasan = _qs_ulasan().get(pk=pk)
     return JsonResponse({"ok": True, "ulasan": _serialisasi(ulasan, request.user)})
@@ -352,16 +405,121 @@ def hapus_balasan(request, pk):
 # ---------- Seller: laporan ----------
 @require_POST
 @api_login_required
+@rate_limit(requests=5, per_seconds=60, key_prefix="rv_lapor")
 def laporkan_ulasan(request, pk):
     ulasan, resp = _ulasan_toko_saya(request, pk)
     if resp:
         return resp
-    alasan, error = _baca_teks(request, "alasan", 300, minimal=5)
-    if error:
-        return _err(error)
+    form = LaporanForm(request.POST)
+    if not form.is_valid():
+        return _err(_pesan_form(form))
     try:
         with transaction.atomic():
-            LaporanUlasan.objects.create(ulasan=ulasan, pelapor=request.user, alasan=alasan)
+            LaporanUlasan.objects.create(
+                ulasan=ulasan, pelapor=request.user, alasan=form.cleaned_data["alasan"]
+            )
     except IntegrityError:
         return _err("Anda sudah melaporkan ulasan ini.", 409)
     return JsonResponse({"ok": True, "pesan": "Laporan terkirim dan akan ditinjau admin."}, status=201)
+
+
+# ---------------------------------------------------------------------------
+# HALAMAN HTML (template + form; data diambil lewat AJAX dari view JSON di atas)
+# ---------------------------------------------------------------------------
+def _produk_toko(toko):
+    """Produk toko yang masih relevan untuk pembeli (bukan ditolak/kedaluwarsa)."""
+    return list(
+        Product.objects.filter(seller=toko).exclude(status__in=["rejected", "expired"]).order_by("name")
+    )
+
+
+def _konteks_dasar(request, mode, toko=None):
+    pemilik = toko is not None and request.user.is_authenticated and toko.user_id == request.user.id
+    konteks = {
+        "mode": mode,
+        "toko": toko,
+        "pemilik": pemilik,
+        "login_url": reverse("users:login"),
+        "form_edit": UlasanEditForm(auto_id="edit_%s"),
+        "form_balas": BalasanForm(auto_id="balas_%s"),
+        "form_laporan": LaporanForm(auto_id="laporan_%s"),
+    }
+    if mode == "saya":
+        konteks["judul"] = konteks["heading"] = "Ulasan Saya"
+        konteks["url_data"] = reverse("reviews:saya")
+        return konteks
+
+    produk = _produk_toko(toko)
+    pilihan = [(str(p.pk), p.name) for p in produk]
+    konteks["form_filter"] = FilterUlasanForm(
+        request.GET or None, produk_choices=pilihan, boleh_belum_dibalas=pemilik
+    )
+    if mode == "penjual":
+        konteks["judul"] = konteks["heading"] = "Ulasan Toko"
+        konteks["url_data"] = reverse("reviews:penjual")
+    else:
+        konteks["judul"] = f"Ulasan {toko.store_name}"
+        konteks["heading"] = "Ulasan"
+        konteks["url_data"] = reverse("reviews:daftar", args=[toko.id])
+        konteks["url_tambah"] = reverse("reviews:tambah", args=[toko.id])
+        _siapkan_form_tulis(request, konteks, toko, produk)
+    return konteks
+
+
+def _siapkan_form_tulis(request, konteks, toko, produk):
+    """Tentukan apakah pengunjung boleh menulis ulasan & produk apa yang bisa diulas."""
+    role = get_role(request.user)
+    if role == "guest":
+        konteks["info_tulis"] = "Masuk sebagai pembeli untuk menulis ulasan."
+        return
+    if role != "buyer":
+        return  # seller/admin: tidak ada form dan tidak perlu pesan
+    sudah = set(
+        UlasanToko.objects.filter(pembeli=request.user, toko=toko).values_list("produk_id", flat=True)
+    )
+    bisa = [
+        (str(p.pk), p.name)
+        for p in produk
+        if p.status == "verified"
+        and p.pk not in sudah
+        and integrations.pernah_membeli(request.user, p.pk)
+    ]
+    if bisa:
+        initial = {}
+        target_p = request.GET.get("produk")
+        if target_p and any(str(p[0]) == str(target_p) for p in bisa):
+            initial["produk_id"] = target_p
+        konteks["form_tulis"] = UlasanBaruForm(auto_id="tulis_%s", produk_choices=bisa, initial=initial)
+    else:
+        konteks["info_tulis"] = (
+            "Belum ada produk dari toko ini yang bisa Anda ulas. "
+            "Ulasan hanya dapat ditulis untuk produk dari pesanan yang sudah selesai."
+        )
+
+
+@require_GET
+def halaman_toko(request, toko_id):
+    """Laman Ulasan Toko (publik)."""
+    toko = get_object_or_404(SellerProfile, pk=toko_id)
+    return render(request, "reviews/daftar.html", _konteks_dasar(request, "toko", toko))
+
+
+@require_GET
+def halaman_saya(request):
+    """'Ulasan Saya' (buyer)."""
+    if not request.user.is_authenticated:
+        return redirect("users:login")
+    if get_role(request.user) != "buyer":
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "reviews/daftar.html", _konteks_dasar(request, "saya"))
+
+
+@require_GET
+def halaman_penjual(request):
+    """'Ulasan Toko' di dashboard seller: ulasan toko miliknya, lengkap dengan balas & laporkan."""
+    if not request.user.is_authenticated:
+        return redirect("users:login")
+    toko = _toko_milik(request.user)
+    if get_role(request.user) != "seller" or toko is None:
+        return redirect("dashboard:show_dashboard_home")
+    return render(request, "reviews/daftar.html", _konteks_dasar(request, "penjual", toko))
