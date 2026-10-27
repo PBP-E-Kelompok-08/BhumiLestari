@@ -68,7 +68,9 @@
 
     {% if user.is_authenticated %}
         <div class="sidebar-user">
-            <img class="sidebar-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+            <img class="nav-avatar"
+                src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                alt="Logo akun">
 
             {% if user.is_superuser %}
                 <div class = "user-info"><strong>Admin</strong><br>Etmin</div>
