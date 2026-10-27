@@ -7,7 +7,10 @@
         sessions: [],
         activeSessionId: null,
         activeSessionData: null,
-        pollingTimer: null
+        pollingTimer: null,
+        isSending: false,
+        pendingMessages: {},
+        renderedMessages: []
     };
 
     var els = {};
@@ -23,6 +26,7 @@
         els.chatBody = document.getElementById("buyerChatBody");
         els.composerForm = document.getElementById("buyerComposerForm");
         els.messageInput = document.getElementById("buyerMessageInput");
+        els.sendBtn = document.getElementById("buyerSendBtn");
         els.contextBar = document.getElementById("productContextBar");
         els.contextTags = document.getElementById("productContextTags");
         els.contextChips = document.getElementById("productContextChips");
@@ -268,6 +272,192 @@
         }
     }
 
+    function createMessageBubbleHtml(m, isAiSession, isLastAi) {
+        var timeStr = ChatCore.formatTimeHM(m.created_at);
+
+        if (m.sender_type === "system") {
+            return (
+                '<div class="chat-bubble-row system">' +
+                '<div class="chat-bubble">' +
+                ChatCore.escapeHtml(m.content) +
+                "</div>" +
+                "</div>"
+            );
+        }
+
+        var isOutgoing = m.sender_type === "buyer";
+        var rowClass = isOutgoing ? "outgoing" : "incoming";
+        if (m.is_pending) {
+            rowClass += " pending-send";
+        }
+
+        var dataAttrs = "";
+        if (m.id) {
+            dataAttrs += ' data-msg-id="' + ChatCore.escapeHtml(m.id) + '"';
+        }
+        if (m.temp_id) {
+            dataAttrs += ' data-temp-id="' + ChatCore.escapeHtml(m.temp_id) + '"';
+        }
+
+        var html = '<div class="chat-bubble-row ' + rowClass + '"' + dataAttrs + '>';
+        html += '<div class="chat-bubble">';
+
+        if (m.sender_type === "ai") {
+            var botLabel = "EucalypBot";
+            var signMatch = (m.content || "").match(/-([A-Za-z0-9_]+Bot)\s*$/i);
+            if (signMatch) {
+                botLabel = signMatch[1];
+            }
+            html += '<span class="chat-bot-sender-name">' + ChatCore.escapeHtml(botLabel) + "</span>";
+        }
+
+        html += ChatCore.escapeHtml(m.content);
+
+        // Show "Hubungi Penjual" button inside AI message bubble when in active AI session
+        if (isAiSession && m.sender_type === "ai" && isLastAi) {
+            html +=
+                '<div class="chat-bubble-actions">' +
+                '<button type="button" class="chat-pill-btn-olive js-escalate-seller">Hubungi Penjual</button>' +
+                "</div>";
+        }
+
+        html += "</div>";
+        if (timeStr) {
+            html += '<span class="chat-bubble-time">' + ChatCore.escapeHtml(timeStr) + "</span>";
+        }
+        html += "</div>";
+        return html;
+    }
+
+    function bindEscalateButtons() {
+        if (!els.messagesContainer) return;
+        els.messagesContainer.querySelectorAll(".js-escalate-seller").forEach(function (btn) {
+            btn.onclick = function () {
+                escalateToSeller();
+            };
+        });
+    }
+
+    function showTypingIndicator(botName) {
+        if (!els.messagesContainer) return;
+        hideTypingIndicator();
+        var label = botName || "EucalypBot";
+        var html =
+            '<div id="aiTypingIndicator" class="chat-bubble-row incoming">' +
+            '<div class="chat-bubble chat-typing-indicator">' +
+            '<span class="chat-bot-sender-name" style="margin-right: 6px;">' + ChatCore.escapeHtml(label) + '</span>' +
+            '<span>mengetik balasan</span>' +
+            '<span class="chat-typing-dots">' +
+            '<span class="chat-typing-dot"></span>' +
+            '<span class="chat-typing-dot"></span>' +
+            '<span class="chat-typing-dot"></span>' +
+            '</span>' +
+            '</div>' +
+            '</div>';
+        els.messagesContainer.insertAdjacentHTML("beforeend", html);
+        scrollToBottom();
+    }
+
+    function hideTypingIndicator() {
+        var el = document.getElementById("aiTypingIndicator");
+        if (el) el.remove();
+    }
+
+    function scrollToBottom() {
+        if (els.chatBody) {
+            els.chatBody.scrollTop = els.chatBody.scrollHeight;
+        }
+    }
+
+    function updateSessionPreview(sessionId, text) {
+        if (!sessionId || !text) return;
+        var cleanText = text.replace(/\s+/g, " ").trim();
+        var session = state.sessions.find(function (s) { return s.id === sessionId; });
+        if (session) {
+            session.last_message = {
+                content: cleanText,
+                created_at: new Date().toISOString()
+            };
+        }
+        if (els.sessionList) {
+            var item = els.sessionList.querySelector('[data-session-id="' + sessionId + '"]');
+            if (item) {
+                var previewEl = item.querySelector(".chat-session-preview");
+                if (previewEl) {
+                    previewEl.textContent = cleanText;
+                }
+            }
+        }
+    }
+
+    function removePendingMessage(sessionId, tempId) {
+        if (!state.pendingMessages || !state.pendingMessages[sessionId]) return;
+        state.pendingMessages[sessionId] = state.pendingMessages[sessionId].filter(function (p) {
+            return p.temp_id !== tempId && p.id !== tempId;
+        });
+    }
+
+    function deduplicateMessages(messages) {
+        var seenIds = new Set();
+        var seenSignatures = new Set();
+        var result = [];
+
+        messages.forEach(function (m) {
+            if (m.id && seenIds.has(m.id)) {
+                return;
+            }
+            var sig = m.sender_type + "::" + (m.content || "").trim();
+            if (m.temp_id && seenSignatures.has(sig)) {
+                return;
+            }
+
+            if (m.id) seenIds.add(m.id);
+            seenSignatures.add(sig);
+            result.push(m);
+        });
+
+        return result;
+    }
+
+    function reconcileServerMessages(serverMessages, sessionId) {
+        var pending = (state.pendingMessages && state.pendingMessages[sessionId]) || [];
+        if (!pending || pending.length === 0) {
+            return serverMessages;
+        }
+
+        var remainingPending = [];
+        pending.forEach(function (p) {
+            var matched = serverMessages.some(function (sm) {
+                if (sm.id && sm.id === p.id) return true;
+                if (sm.sender_type === p.sender_type && (sm.content || "").trim() === (p.content || "").trim()) {
+                    var pTime = new Date(p.created_at).getTime();
+                    var sTime = new Date(sm.created_at).getTime();
+                    if (isNaN(pTime) || isNaN(sTime) || Math.abs(pTime - sTime) < 90000) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            if (!matched) {
+                remainingPending.push(p);
+            }
+        });
+
+        state.pendingMessages[sessionId] = remainingPending;
+        return deduplicateMessages(serverMessages.concat(remainingPending));
+    }
+
+    function haveMessagesChanged(oldMsgs, newMsgs) {
+        if (!oldMsgs || !newMsgs) return true;
+        if (oldMsgs.length !== newMsgs.length) return true;
+        for (var i = 0; i < oldMsgs.length; i++) {
+            if (oldMsgs[i].id !== newMsgs[i].id || oldMsgs[i].content !== newMsgs[i].content) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function renderMessages(messages, session) {
         if (!els.messagesContainer) return;
         if (!messages || messages.length === 0) {
@@ -276,6 +466,7 @@
                 '<h2 class="chat-state-title">Mulai Percakapan</h2>' +
                 '<p class="chat-state-desc">Ketik pertanyaan Anda di bawah untuk menanyakan stok, bahan, atau pengiriman produk.</p>' +
                 "</div>";
+            state.renderedMessages = [];
             return;
         }
 
@@ -287,70 +478,23 @@
 
         var html = "";
         messages.forEach(function (m, idx) {
-            var timeStr = ChatCore.formatTimeHM(m.created_at);
-
-            if (m.sender_type === "system") {
-                html +=
-                    '<div class="chat-bubble-row system">' +
-                    '<div class="chat-bubble">' +
-                    ChatCore.escapeHtml(m.content) +
-                    "</div>" +
-                    "</div>";
-                return;
-            }
-
-            var isOutgoing = m.sender_type === "buyer";
-            var rowClass = isOutgoing ? "outgoing" : "incoming";
-
-            html += '<div class="chat-bubble-row ' + rowClass + '">';
-            html += '<div class="chat-bubble">';
-
-            if (m.sender_type === "ai") {
-                // Extract bot name from signature if present, or fallback to EucalypBot / BhumiBot
-                var botLabel = "EucalypBot";
-                var signMatch = (m.content || "").match(/-([A-Za-z0-9_]+Bot)\s*$/i);
-                if (signMatch) {
-                    botLabel = signMatch[1];
-                }
-                html += '<span class="chat-bot-sender-name">' + ChatCore.escapeHtml(botLabel) + "</span>";
-            }
-
-            html += ChatCore.escapeHtml(m.content);
-
-            // Show "Hubungi Penjual" button inside AI message bubble when in active AI session
-            if (isAiSession && m.sender_type === "ai" && idx === lastAiIndex) {
-                html +=
-                    '<div class="chat-bubble-actions">' +
-                    '<button type="button" class="chat-pill-btn-olive js-escalate-seller">Hubungi Penjual</button>' +
-                    "</div>";
-            }
-
-            html += "</div>";
-            if (timeStr) {
-                html += '<span class="chat-bubble-time">' + ChatCore.escapeHtml(timeStr) + "</span>";
-            }
-            html += "</div>";
+            html += createMessageBubbleHtml(m, isAiSession, idx === lastAiIndex);
         });
 
         els.messagesContainer.innerHTML = html;
-
-        // Bind Hubungi Penjual button
-        els.messagesContainer.querySelectorAll(".js-escalate-seller").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                escalateToSeller();
-            });
-        });
-
-        if (els.chatBody) {
-            els.chatBody.scrollTop = els.chatBody.scrollHeight;
-        }
+        state.renderedMessages = messages.slice();
+        bindEscalateButtons();
+        scrollToBottom();
     }
 
     async function handleSendMessage(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (!els.messageInput) return;
         var text = els.messageInput.value.trim();
         if (!text) return;
+
+        // Prevent double send if an in-flight request is pending
+        if (state.isSending) return;
 
         if (!state.activeSessionId || !state.activeSessionData) {
             ChatCore.openModal("productContextModalBackdrop");
@@ -358,11 +502,63 @@
             return;
         }
 
-        els.messageInput.value = "";
+        var currentSessionId = state.activeSessionId;
         var isAi = state.activeSessionData.session_type === "ai" && state.activeSessionData.status === "active";
         var endpoint = isAi
-            ? "/chat/api/sessions/" + state.activeSessionId + "/send/"
-            : "/chat/api/sessions/" + state.activeSessionId + "/direct-send/";
+            ? "/chat/api/sessions/" + currentSessionId + "/send/"
+            : "/chat/api/sessions/" + currentSessionId + "/direct-send/";
+
+        // 1. Immediately clear input & disable send button to prevent double-submit
+        els.messageInput.value = "";
+        state.isSending = true;
+        if (els.sendBtn) els.sendBtn.disabled = true;
+
+        // 2. Generate unique tempId & create optimistic message
+        var tempId = "temp_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
+        var optimisticMsg = {
+            id: tempId,
+            temp_id: tempId,
+            sender_type: "buyer",
+            content: text,
+            created_at: new Date().toISOString(),
+            is_pending: true
+        };
+
+        // 3. Track pending message to avoid duplication during server polling
+        if (!state.pendingMessages) state.pendingMessages = {};
+        if (!state.pendingMessages[currentSessionId]) {
+            state.pendingMessages[currentSessionId] = [];
+        }
+        state.pendingMessages[currentSessionId].push(optimisticMsg);
+
+        // 4. Remove empty state if present
+        var emptyBox = els.messagesContainer ? els.messagesContainer.querySelector(".chat-state-box") : null;
+        if (emptyBox) {
+            emptyBox.remove();
+        }
+
+        // 5. Instantly render optimistic outgoing bubble in DOM
+        if (els.messagesContainer) {
+            var bubbleHtml = createMessageBubbleHtml(optimisticMsg, isAi, false);
+            els.messagesContainer.insertAdjacentHTML("beforeend", bubbleHtml);
+        }
+
+        // Update in-memory rendered messages
+        if (!Array.isArray(state.renderedMessages)) {
+            state.renderedMessages = [];
+        }
+        state.renderedMessages.push(optimisticMsg);
+
+        // 6. Scroll to bottom immediately
+        scrollToBottom();
+
+        // 7. Update sidebar session preview immediately
+        updateSessionPreview(currentSessionId, text);
+
+        // 8. If AI session, show typing indicator right below the sent bubble
+        if (isAi) {
+            showTypingIndicator("EucalypBot");
+        }
 
         try {
             var res = await ChatCore.apiFetch(endpoint, {
@@ -370,14 +566,86 @@
                 body: { content: text }
             });
 
+            // Hide typing indicator
+            hideTypingIndicator();
+
+            // If session switched during request, stop
+            if (state.activeSessionId !== currentSessionId) {
+                removePendingMessage(currentSessionId, tempId);
+                return;
+            }
+
             if (res.handover && res.direct_session_id) {
+                removePendingMessage(currentSessionId, tempId);
                 ChatCore.showToast("Percakapan dialihkan langsung ke penjual.");
                 await selectSession(res.direct_session_id);
+                return;
+            }
+
+            removePendingMessage(currentSessionId, tempId);
+
+            if (isAi) {
+                // AI replied
+                if (res.reply) {
+                    // Remove existing "Hubungi Penjual" buttons from earlier AI bubbles
+                    if (els.messagesContainer) {
+                        els.messagesContainer.querySelectorAll(".chat-bubble-actions").forEach(function (act) {
+                            act.remove();
+                        });
+                    }
+
+                    var aiMsg = {
+                        id: res.message_id || ("ai_" + Date.now()),
+                        sender_type: "ai",
+                        content: res.reply,
+                        created_at: new Date().toISOString()
+                    };
+
+                    if (els.messagesContainer) {
+                        var aiBubbleHtml = createMessageBubbleHtml(aiMsg, true, true);
+                        els.messagesContainer.insertAdjacentHTML("beforeend", aiBubbleHtml);
+                        bindEscalateButtons();
+                    }
+                    state.renderedMessages.push(aiMsg);
+                    scrollToBottom();
+                    updateSessionPreview(currentSessionId, res.reply);
+                }
             } else {
-                await selectSession(state.activeSessionId);
+                // Direct chat reply from server
+                if (res.message) {
+                    optimisticMsg.id = res.message.id;
+                    optimisticMsg.is_pending = false;
+                    optimisticMsg.created_at = res.message.created_at;
+
+                    if (els.messagesContainer) {
+                        var optBubble = els.messagesContainer.querySelector('[data-temp-id="' + tempId + '"]');
+                        if (optBubble) {
+                            optBubble.setAttribute("data-msg-id", res.message.id);
+                            optBubble.removeAttribute("data-temp-id");
+                            optBubble.classList.remove("pending-send");
+                            var timeEl = optBubble.querySelector(".chat-bubble-time");
+                            if (timeEl && res.message.created_at) {
+                                timeEl.textContent = ChatCore.formatTimeHM(res.message.created_at);
+                            }
+                        }
+                    }
+                }
             }
         } catch (err) {
-            ChatCore.showToast(err.message);
+            hideTypingIndicator();
+            removePendingMessage(currentSessionId, tempId);
+            if (els.messagesContainer) {
+                var failedBubble = els.messagesContainer.querySelector('[data-temp-id="' + tempId + '"]');
+                if (failedBubble) {
+                    failedBubble.style.opacity = "0.55";
+                    failedBubble.title = "Gagal terkirim: " + err.message;
+                }
+            }
+            ChatCore.showToast(err.message || "Gagal mengirim pesan.");
+        } finally {
+            state.isSending = false;
+            if (els.sendBtn) els.sendBtn.disabled = false;
+            if (els.messageInput) els.messageInput.focus();
         }
     }
 
@@ -1084,13 +1352,18 @@
             await loadSessions(false);
         }
 
-        // Poll every 6 seconds to keep messages fresh
+        // Poll every 6 seconds to keep messages fresh without flashing or duplicates
         state.pollingTimer = setInterval(function () {
-            if (state.activeSessionId) {
-                ChatCore.apiFetch("/chat/api/sessions/" + state.activeSessionId + "/messages/")
+            if (state.activeSessionId && !state.isSending) {
+                var currentSessionId = state.activeSessionId;
+                ChatCore.apiFetch("/chat/api/sessions/" + currentSessionId + "/messages/")
                     .then(function (data) {
+                        if (state.activeSessionId !== currentSessionId) return;
                         state.activeSessionData = data.session;
-                        renderMessages(data.messages || [], data.session);
+                        var combined = reconcileServerMessages(data.messages || [], currentSessionId);
+                        if (haveMessagesChanged(state.renderedMessages, combined)) {
+                            renderMessages(combined, data.session);
+                        }
                     })
                     .catch(function () {});
             }

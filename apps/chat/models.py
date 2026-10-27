@@ -260,3 +260,25 @@ class BroadcastMessage(models.Model):
 
     def __str__(self):
         return f"[{self.channel.name}] {self.content[:35]}..."
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.apps import apps
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def ensure_broadcast_channel_for_seller_user(sender, instance, created, **kwargs):
+    if getattr(instance, "role", "") == "seller":
+        store_name = instance.full_name or (instance.email.split("@")[0] if instance.email else "Toko Penjual")
+        if hasattr(instance, "seller_profile") and instance.seller_profile:
+            store_name = instance.seller_profile.store_name
+        BroadcastChannel.objects.get_or_create(
+            seller=instance,
+            defaults={
+                "name": store_name,
+                "description": f"Saluran pengumuman resmi {store_name}",
+                "followers_count": 0,
+            }
+        )
+

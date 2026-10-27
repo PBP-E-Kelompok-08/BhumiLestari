@@ -1381,6 +1381,21 @@ def submit_user_report_api(request):
 # BROADCAST CHANNEL API (FIGMA BROADCAST SCREEN)
 # ==============================================================================
 
+def _ensure_all_sellers_have_broadcast_channels():
+    sellers = User.objects.filter(role="seller").exclude(broadcast_channel__isnull=False)
+    for s in sellers:
+        store_name = _get_seller_store_name(s)
+        channel_name = f"Channel {store_name}" if not store_name.lower().startswith("channel") else store_name
+        BroadcastChannel.objects.get_or_create(
+            seller=s,
+            defaults={
+                "name": channel_name,
+                "description": f"Saluran pengumuman resmi {store_name}",
+                "followers_count": 0,
+            },
+        )
+
+
 @login_required
 def list_broadcast_channels_api(request):
     if request.method != "GET":
@@ -1389,6 +1404,8 @@ def list_broadcast_channels_api(request):
     tab = request.GET.get("tab", "semua").lower()
     search = request.GET.get("search", "").strip().lower()
 
+    _ensure_all_sellers_have_broadcast_channels()
+
     channels_qs = BroadcastChannel.objects.all().order_by("-followers_count")
 
     if tab == "diarsipkan":
@@ -1396,8 +1413,15 @@ def list_broadcast_channels_api(request):
     else:
         channels_qs = channels_qs.exclude(archived_by=request.user)
 
+    channels_list = list(channels_qs)
+    if getattr(request.user, "role", "") == "seller":
+        channels_list.sort(key=lambda c: 0 if c.seller_id == request.user.id else 1)
+
     results = []
-    for c in channels_qs:
+    my_channel = None
+    other_channels = []
+
+    for c in channels_list:
         last_msg = c.messages.first() if c.messages.exists() else None
         if search:
             name_match = search in c.name.lower() or search in c.description.lower()
@@ -1406,23 +1430,32 @@ def list_broadcast_channels_api(request):
                 continue
 
         is_archived = c.archived_by.filter(id=request.user.id).exists()
-        results.append({
+        is_owner = c.seller_id == request.user.id
+        item_data = {
             "id": c.id,
             "name": c.name,
             "description": c.description,
             "seller_email": c.seller.email,
             "followers_count": c.followers_count,
             "is_archived": is_archived,
+            "is_owner": is_owner,
             "last_message": {
                 "content": last_msg.content if last_msg else None,
                 "created_at": last_msg.created_at.isoformat() if last_msg else None,
             }
-        })
+        }
+        results.append(item_data)
+        if is_owner:
+            my_channel = item_data
+        else:
+            other_channels.append(item_data)
 
     return JsonResponse({
         "status": "success",
         "tab": tab,
         "total": len(results),
+        "my_channel": my_channel,
+        "other_channels": other_channels,
         "channels": results,
     })
 
@@ -1590,17 +1623,8 @@ def seller_keywords_view(request):
 
 @login_required
 def broadcast_view(request):
+    _ensure_all_sellers_have_broadcast_channels()
     is_seller = getattr(request.user, "role", "") == "seller"
-    if is_seller:
-        store_name = _get_seller_store_name(request.user)
-        BroadcastChannel.objects.get_or_create(
-            seller=request.user,
-            defaults={
-                "name": f"Channel {store_name}",
-                "description": f"Saluran pengumuman resmi {store_name}",
-                "followers_count": 0,
-            },
-        )
     context = {
         "active_nav": "broadcast",
         "is_seller_mode": is_seller,

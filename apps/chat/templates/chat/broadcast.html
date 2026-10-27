@@ -41,7 +41,6 @@
         </div>
         <div class="chat-header-info">
             <h1 id="activeChannelTitle" class="chat-header-title">Pilih Saluran Broadcast</h1>
-            <p id="activeChannelFollowers" class="chat-header-subtitle">0 followers</p>
         </div>
     </div>
 
@@ -80,6 +79,22 @@
 
 <footer id="broadcastReadonlyFooter" class="chat-bottom-bar chat-bottom-readonly">
     Anda tidak punya akses untuk mengirim pesan pada channel ini
+</footer>
+
+<footer id="broadcastComposerFooter" class="chat-bottom-bar" style="display: none;" hidden>
+    <form id="broadcastComposerForm" class="chat-composer-form">
+        <input type="text"
+               id="broadcastMessageInput"
+               class="chat-composer-input"
+               placeholder="Ketik pesan siaran untuk pengikut tokomu..."
+               aria-label="Ketik pesan siaran"
+               autocomplete="off">
+        <button type="submit" id="broadcastSendBtn" class="chat-send-btn" aria-label="Kirim pesan siaran">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+        </button>
+    </form>
 </footer>
 {% endblock main_area_content %}
 

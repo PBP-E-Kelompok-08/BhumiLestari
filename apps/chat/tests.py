@@ -641,22 +641,30 @@ class ChatAPITest(TestCase):
         self.assertEqual(UserReport.objects.get(id=report_id).reason, "Pembeli menggunakan kata-kata kasar.")
 
     def test_broadcast_channel_apis(self):
-        # 1. Create channel
-        channel = BroadcastChannel.objects.create(
-            seller=self.seller,
-            name="Channel Toko Eucalyptus",
-            description="Informasi promo dan tips hidup ramah lingkungan",
-            followers_count=150,
-        )
+        # 1. Channel auto-created by signal for seller
+        channel = self.seller.broadcast_channel
+        channel.name = "Channel Toko Eucalyptus"
+        channel.description = "Informasi promo dan tips hidup ramah lingkungan"
+        channel.followers_count = 150
+        channel.save()
 
-        # 2. List channels
+        # 2. List channels (Buyer vs Seller)
         self.client.login(username="buyer@test.com", password="password123")
         list_url = reverse("chat:list_broadcast_channels")
         resp_list = self.client.get(list_url)
         self.assertEqual(resp_list.status_code, 200)
         self.assertEqual(resp_list.json()["total"], 1)
+        self.assertFalse(resp_list.json()["channels"][0]["is_owner"])
+
+        self.client.login(username="seller@test.com", password="password123")
+        resp_list_seller = self.client.get(list_url)
+        self.assertEqual(resp_list_seller.status_code, 200)
+        self.assertTrue(resp_list_seller.json()["channels"][0]["is_owner"])
+        self.assertIsNotNone(resp_list_seller.json()["my_channel"])
+        self.assertEqual(resp_list_seller.json()["my_channel"]["id"], channel.id)
 
         # 3. Buyer cannot post to broadcast
+        self.client.login(username="buyer@test.com", password="password123")
         send_url = reverse("chat:send_broadcast_message", args=[channel.id])
         resp_forbidden = self.client.post(send_url, data=json.dumps({"content": "Promo palsu"}), content_type="application/json")
         self.assertEqual(resp_forbidden.status_code, 403)
@@ -716,14 +724,25 @@ class ChatAPITest(TestCase):
         resp_broadcast = self.client.get(reverse("chat:broadcast"))
         self.assertEqual(resp_broadcast.status_code, 200)
         self.assertContains(resp_broadcast, "Anda tidak punya akses untuk mengirim pesan pada channel ini")
+        self.assertContains(resp_broadcast, "broadcastComposerFooter")
         self.assertTrue(BroadcastChannel.objects.filter(seller=self.seller).exists())
 
-    def test_broadcast_channel_archive_and_tabs(self):
-        channel = BroadcastChannel.objects.create(
-            seller=self.seller,
-            name="Channel Toko Lestari",
-            followers_count=100,
+    def test_all_sellers_automatically_have_broadcast_channel(self):
+        new_seller = User.objects.create_user(
+            username="seller.baru@bhumilestari.com",
+            email="seller.baru@bhumilestari.com",
+            password="password123",
+            role="seller",
+            full_name="Toko Organik Sejahtera"
         )
+        self.assertTrue(BroadcastChannel.objects.filter(seller=new_seller).exists())
+        self.assertEqual(new_seller.broadcast_channel.name, "Toko Organik Sejahtera")
+
+    def test_broadcast_channel_archive_and_tabs(self):
+        channel = self.seller.broadcast_channel
+        channel.name = "Channel Toko Lestari"
+        channel.followers_count = 100
+        channel.save()
 
         self.client.login(username="buyer@test.com", password="password123")
         archive_url = reverse("chat:toggle_archive_broadcast_channel", args=[channel.id])
