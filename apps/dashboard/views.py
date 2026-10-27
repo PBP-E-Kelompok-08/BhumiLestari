@@ -4,7 +4,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from apps.products.models import Product
 from apps.products.views import get_role, cek_status
-from apps.reviews.services import laporan_ulasan, ringkasan_ulasan_toko
+from apps.reviews.services import laporan_ulasan, rating_per_produk, ringkasan_ulasan_toko
 
 def show_dashboard_home(request):
     role = get_role(request.user)
@@ -46,8 +46,12 @@ def api_products(request):
 
     products = products.order_by("-created_at")
 
+    products = list(products)
+    rating = rating_per_produk(p.pk for p in products)  # 1 query untuk semua kartu
+
     items = []
     for product in products:
+        stat = rating.get(product.pk)
         items.append({
             "id": str(product.pk),
             "product_id": str(product.pk),
@@ -64,6 +68,11 @@ def api_products(request):
             "verification_summary": product.verification_summary,
             "edit_url": reverse("products:edit_product", args=[product.pk]),
             "delete_url": reverse("products:delete_product", args=[product.pk]),
+            "toko_id": product.seller_id,
+            "review_url": reverse("reviews:halaman_toko", args=[product.seller_id]) + f"?produk={product.pk}",
+            "rating": stat["rata"] if stat else None,
+            "rating_teks": stat["rata_teks"] if stat else None,
+            "jumlah_ulasan": stat["jumlah"] if stat else 0,
         })
 
     return JsonResponse({

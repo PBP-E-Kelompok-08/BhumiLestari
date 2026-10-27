@@ -81,6 +81,13 @@ function renderStatus(product, role) {
   return badge + note;
 }
 
+function renderRating(product) {
+  if (!product.jumlah_ulasan) {
+    return `<p class="dash-rating dash-rating-kosong">Belum ada ulasan</p>`;
+  }
+  return `<p class="dash-rating"><span class="dash-rating-bintang">★</span> ${escapeHtml(product.rating_teks)} <small>(${product.jumlah_ulasan} ulasan)</small></p>`;
+}
+
 function renderCard(product, role, loginUrl) {
   const image = product.image
     ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">`
@@ -98,9 +105,10 @@ function renderCard(product, role, loginUrl) {
         <span>Rp. ${formatRupiah(product.final_price)}</span>
         ${discount}
       </div>
+      ${renderRating(product)}
       ${renderStatus(product, role)}
       <div class="dash-card-actions">
-        <a href="#" class="dash-btn dash-btn-review">Lihat Review</a>
+        <a href="${escapeHtml(product.review_url)}" class="dash-btn dash-btn-review">Lihat Review</a>
         ${renderActions(product, role, loginUrl)}
       </div>
     </article>`;
