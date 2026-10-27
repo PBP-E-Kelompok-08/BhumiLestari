@@ -14,6 +14,10 @@
 
     var els = {};
 
+    /**
+     * Melakukan caching referensi elemen DOM pada layar Saluran Siaran (Broadcast Channel).
+     * Mengatur status awal form composer siaran: disembunyikan sampai hak akses pemilik diverifikasi.
+     */
     function cacheElements() {
         els.channelList = document.getElementById("broadcastChannelList");
         els.searchForm = document.getElementById("broadcastSearchForm");
@@ -43,6 +47,12 @@
         }
     }
 
+    /**
+     * DISABLED
+     * Memformat angka jumlah pengikut saluran menjadi format ringkas (misal: "1.5k followers").
+     * @param {number|string} num - Jumlah total pengikut saluran.
+     * @returns {string} String label pengikut yang rapi.
+     */
     function formatFollowerCount(num) {
         var n = parseInt(num, 10) || 0;
         if (n >= 1000) {
@@ -51,6 +61,11 @@
         return n + " followers";
     }
 
+    /**
+     * Mengambil daftar saluran siaran toko dari endpoint `/chat/api/broadcast/channels/`.
+     * Mendukung pemfilteran tab (semua/arsip) dan query pencarian nama saluran toko.
+     * @param {boolean} preserveSelection - Jika true, tidak mengubah saluran aktif saat ini.
+     */
     async function loadChannels(preserveSelection) {
         try {
             var url = "/chat/api/broadcast/channels/?tab=" + encodeURIComponent(state.currentTab);
@@ -78,6 +93,13 @@
         }
     }
 
+    /**
+     * Membangun markup HTML untuk satu item saluran siaran di daftar sidebar.
+     * Menyertakan lencana "Saluran Anda" jika saluran tersebut adalah milik penjual yang sedang login.
+     * @param {object} c - Objek data saluran siaran.
+     * @param {boolean} isMyChannel - True jika saluran ini dimiliki oleh penjual yang aktif.
+     * @returns {string} Markup HTML elemen <li> saluran siaran.
+     */
     function renderChannelItemHtml(c, isMyChannel) {
         var isActive = c.id === state.activeChannelId;
         var preview =
@@ -122,6 +144,11 @@
         );
     }
 
+    /**
+     * Merender daftar saluran siaran ke sidebar (#broadcastChannelList).
+     * Memisahkan bagian "Saluran Toko Anda" di bagian paling atas
+     * dan "Saluran Toko Lainnya" di bawah pembatas.
+     */
     function renderChannelList() {
         if (!els.channelList) return;
         if (state.channels.length === 0) {
@@ -153,6 +180,10 @@
         bindChannelListEvents();
     }
 
+    /**
+     * Mengikat pendengar klik dan keyboard (Enter/Space) pada setiap item saluran di sidebar,
+     * serta tombol arsip saluran siaran.
+     */
     function bindChannelListEvents() {
         if (!els.channelList) return;
 
@@ -181,6 +212,9 @@
         });
     }
 
+    /**
+     * Menandai item saluran yang aktif di sidebar dengan menambahkan kelas CSS `.active`.
+     */
     function highlightActiveChannelItem() {
         if (!els.channelList) return;
         els.channelList.querySelectorAll(".chat-session-item").forEach(function (item) {
@@ -189,6 +223,16 @@
         });
     }
 
+    /**
+     * Memilih saluran siaran tertentu:
+     * 1. Mengambil riwayat pesan siaran dari `/chat/api/broadcast/channels/<id>/messages/`.
+     * 2. Menyesuaikan header (nama channel & jumlah pengikut).
+     * 3. Mengecek apakah pengguna saat ini adalah pemilik saluran (`is_owner`).
+     *    - Jika pemilik: Menampilkan form penulisan siaran (#broadcastComposerFooter).
+     *    - Jika bukan: Menampilkan footer read-only (#broadcastReadonlyFooter).
+     * 4. Merender daftar pesan siaran.
+     * @param {number} channelId - ID numerik BroadcastChannel yang dipilih.
+     */
     async function selectChannel(channelId) {
         if (!channelId) return;
         state.activeChannelId = channelId;
@@ -229,6 +273,10 @@
         }
     }
 
+    /**
+     * Mengarsipkan atau membatalkan pengarsipan saluran siaran via POST `/chat/api/broadcast/channels/<id>/archive/`.
+     * @param {number} channelId - ID saluran siaran yang akan diarsipkan.
+     */
     async function toggleArchiveChannel(channelId) {
         var targetId = channelId || state.activeChannelId;
         if (!targetId) return;
@@ -249,6 +297,13 @@
         }
     }
 
+    /**
+     * Merender seluruh daftar pesan pengumuman siaran ke dalam kontainer pesan.
+     * Mengurutkan pesan secara kronologis (pesan terlama di atas, terbaru di bawah)
+     * dan menggulung scroll ke bagian terbawah.
+     * @param {Array} messages - Daftar pesan siaran dari backend.
+     * @param {boolean} isOwner - Status apakah pengguna adalah pemilik saluran.
+     */
     function renderBroadcastMessages(messages, isOwner) {
         if (!els.messagesContainer) return;
         if (!messages || messages.length === 0) {
@@ -288,6 +343,11 @@
         }
     }
 
+    /**
+     * Menambahkan satu gelembung pesan siaran baru secara instan di akhir percakapan (Optimistic UI).
+     * @param {object} m - Objek pesan siaran (id/temp_id, content, created_at).
+     * @param {boolean} isOwner - True jika pesan dikirim oleh pemilik toko.
+     */
     function appendBroadcastMessage(m, isOwner) {
         if (!els.messagesContainer) return;
         var emptyBox = els.messagesContainer.querySelector(".chat-state-box");
@@ -323,6 +383,12 @@
         }
     }
 
+    /**
+     * Memperbarui cuplikan pesan terakhir (preview) pada item saluran di sidebar
+     * seketika setelah pesan siaran baru dikirim.
+     * @param {number} channelId - ID saluran siaran.
+     * @param {string} content - Teks pesan siaran baru.
+     */
     function updateChannelLastMessage(channelId, content) {
         var ch = state.channels.find(function (c) { return c.id === channelId; });
         if (ch) {
@@ -334,6 +400,13 @@
         renderChannelList();
     }
 
+    /**
+     * Mengikat seluruh event listener interaktif pada antarmuka saluran siaran:
+     * - Form pencarian saluran toko.
+     * - Tombol tab filter (Semua / Arsip).
+     * - Dropdown menu header dan tombol arsip.
+     * - Form pengiriman pesan siaran baru pemilik toko (optimistic send & rekonsiliasi ID).
+     */
     function bindEvents() {
         if (els.searchForm) {
             els.searchForm.addEventListener("submit", function (e) {

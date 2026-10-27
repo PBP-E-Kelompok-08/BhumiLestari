@@ -31,16 +31,49 @@ User = get_user_model()
 
 
 def _json_error(message, status=400):
+    """
+    Helper untuk mengembalikan respons JSON standar ketika terjadi kesalahan (error).
+
+    Args:
+        message (str): Pesan kesalahan yang deskriptif dan ramah pengguna.
+        status (int, optional): Kode HTTP status response (default: 400 Bad Request).
+
+    Returns:
+        JsonResponse: Objek respons JSON berformat {"status": "error", "message": message}.
+    """
     return JsonResponse({"status": "error", "message": message}, status=status)
 
 
 def _get_seller_store_name(seller):
+    """
+    Mengambil nama toko penjual untuk tampilan antarmuka dan system prompt bot AI.
+
+    Prioritas pengambilan nama:
+    1. `seller.seller_profile.store_name` (nama toko resmi jika ada profil seller).
+    2. `seller.full_name` (nama lengkap user).
+    3. Username dari prefix email (fallback jika nama belum diisi).
+
+    Args:
+        seller (User): Objek user penjual.
+
+    Returns:
+        str: Nama toko atau nama penjual yang siap ditampilkan.
+    """
     if hasattr(seller, 'seller_profile') and seller.seller_profile:
         return seller.seller_profile.store_name
     return seller.full_name or seller.email.split('@')[0]
 
 
 def _get_seller_chat_settings(seller):
+    """
+    Mengambil atau membuat entri pengaturan obrolan (`SellerChatSettings`) untuk penjual.
+
+    Args:
+        seller (User): Objek user penjual.
+
+    Returns:
+        SellerChatSettings: Objek pengaturan chat dan bot AI milik penjual tersebut.
+    """
     settings_obj, _ = SellerChatSettings.objects.get_or_create(
         seller=seller,
         defaults={
@@ -51,6 +84,15 @@ def _get_seller_chat_settings(seller):
 
 
 def _format_time_str(t):
+    """
+    Memformat objek waktu (`datetime.time` atau string) menjadi representasi string 'HH:MM'.
+
+    Args:
+        t (time|str|None): Objek waktu jam atau string waktu.
+
+    Returns:
+        str: Representasi format jam dua digit 'HH:MM' (default '00:00' jika kosong).
+    """
     if not t:
         return "00:00"
     if hasattr(t, "strftime"):
@@ -59,6 +101,20 @@ def _format_time_str(t):
 
 
 def _is_store_open(chat_settings):
+    """
+    Memeriksa apakah toko penjual saat ini sedang dalam jam operasional buka.
+    Menggunakan zona waktu lokal Jakarta (WIB / Asia/Jakarta).
+
+    Logika:
+    - Jika `start <= end`: Toko buka pada rentang hari yang sama (misal 08:00 - 19:00).
+    - Jika `start > end`: Toko buka melintasi tengah malam (misal 20:00 - 04:00).
+
+    Args:
+        chat_settings (SellerChatSettings): Pengaturan jam operasional bot penjual.
+
+    Returns:
+        bool: True jika saat ini toko buka, False jika toko sedang tutup.
+    """
     try:
         from zoneinfo import ZoneInfo
         now_time = datetime.now(ZoneInfo("Asia/Jakarta")).time()
@@ -82,8 +138,25 @@ def _is_store_open(chat_settings):
 
 def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, forward_question=None):
     """
-    Mengalihkan sesi obrolan AI ke sesi obrolan langsung (direct) dengan penjual.
-    Riwayat obrolan AI disalin ke sesi direct agar penjual memahami konteks percakapan sebelumnya.
+    Mengalihkan sesi obrolan AI ke sesi obrolan langsung (direct) dengan penjual (Handover).
+
+    Alur:
+    1. Mengambil atau membuat sesi bertipe `TYPE_DIRECT` antara pembeli dan penjual terkait.
+    2. Menyalin konteks produk (`SessionProductContext`) dari sesi AI ke sesi direct.
+    3. Menyalin seluruh riwayat obrolan AI ke sesi direct (`is_inherited_from_ai=True`)
+       agar penjual langsung memahami apa yang ditanyakan pembeli sebelumnya.
+    4. Menyisipkan pesan sistem pembatas: '--- Anda kini terhubung langsung dengan penjual... ---'.
+    5. Jika terdapat pertanyaan pembeli yang belum terjawab (`forward_question`),
+       pesan tersebut otomatis diposting di bawah pembatas sebagai pesan baru yang belum dibaca penjual.
+    6. Menandai sesi AI lama sebagai `STATUS_RESOLVED`.
+
+    Args:
+        ai_session (ChatSession): Sesi AI awal yang ingin dialihkan.
+        reason (str, optional): Alasan pengalihan ('manual' atau 'unanswered').
+        forward_question (str, optional): Pertanyaan pembeli yang belum terjawab oleh AI.
+
+    Returns:
+        ChatSession: Objek sesi direct aktif yang siap digunakan oleh pembeli dan penjual.
     """
     direct_session = ChatSession.objects.filter(
         buyer=ai_session.buyer,
@@ -182,9 +255,20 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
 
 def _transfer_to_ai_session(direct_session):
     """
-    Mengalihkan sesi obrolan langsung (direct) kembali ke sesi asisten AI bot.
-    Riwayat obrolan pembeli dan penjual di sesi direct disalin ke sesi AI.
-    Sesi direct kemudian ditandai resolved.
+    Mengalihkan sesi obrolan langsung (direct) kembali ke sesi asisten AI bot toko.
+
+    Alur:
+    1. Mengambil atau membuat sesi bertipe `TYPE_AI` antara pembeli dan penjual terkait.
+    2. Menyalin konteks produk (`SessionProductContext`) dari sesi direct ke sesi AI.
+    3. Menyalin pesan-pesan obrolan terbaru dari sesi direct ke sesi AI agar bot memiliki konteks penuh.
+    4. Menyisipkan pesan sistem: '--- Anda kini beralih kembali ke Asisten AI (<bot_name>)... ---'.
+    5. Menandai sesi direct sebelumnya sebagai `STATUS_RESOLVED`.
+
+    Args:
+        direct_session (ChatSession): Sesi chat direct yang ingin dialihkan kembali ke AI.
+
+    Returns:
+        ChatSession: Objek sesi AI aktif yang siap menerima pertanyaan pembeli berikutnya.
     """
     ai_session = ChatSession.objects.filter(
         buyer=direct_session.buyer,
@@ -268,15 +352,35 @@ def _transfer_to_ai_session(direct_session):
 @login_required
 def get_or_create_ai_session_api(request):
     """
-    POST: Inisiasi sesi chat AI untuk satu atau lebih produk.
-    Payload:
+    Mengambil sesi chat AI yang sudah ada atau membuat sesi obrolan AI baru untuk toko dan produk tertentu.
+
+    Metode: POST
+    Endpoint: `/chat/api/sessions/ai/`
+
+    Payload JSON:
+    ```json
     {
         "seller_id": 1,
         "products": [
-            {"product_id": "PRD-01", "product_name": "Sabun Bambu"},
-            {"product_id": "PRD-02", "product_name": "Sikat Gigi"}
+            {"product_id": "1", "product_name": "Sabun Bambu Ramah Lingkungan"},
+            {"product_id": "2", "product_name": "Sikat Gigi Bambu"}
         ]
     }
+    ```
+
+    Alur:
+    1. Validasi user bukan penjual itu sendiri.
+    2. Cek apakah ada sesi AI aktif. Jika belum ada tetapi ada sesi direct aktif,
+       alihkan sesi direct ke sesi AI (`_transfer_to_ai_session`).
+    3. Jika benar-benar baru, buat `ChatSession(type='ai')` dan kirim sambutan selamat datang
+       otomatis dari bot jika `is_auto_reply_enabled=True`.
+    4. Lampirkan produk ke `SessionProductContext`.
+
+    Args:
+        request (HttpRequest): Objek HTTP request Django (wajib login).
+
+    Returns:
+        JsonResponse: Detail session_id, tipe sesi, info penjual, dan daftar konteks produk.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -376,11 +480,29 @@ def get_or_create_ai_session_api(request):
 @login_required
 def add_product_context_api(request, session_id):
     """
-    Payload:
+    Menambahkan konteks produk ke sesi percakapan (POST) atau menghapus konteks produk (DELETE).
+
+    Metode: POST | DELETE
+    Endpoint: `/chat/api/sessions/<session_id>/products/`
+
+    Payload POST JSON:
+    ```json
     {
-        "products": [{"product_id": "PRD-03", "product_name": "stuff or product or whatever"}]
+        "products": [
+            {"product_id": "1", "product_name": "Sabun Bambu"}
+        ]
     }
-    DELETE: Hapus konteks produk dari sesi (spesifik via ?product_id=... atau semua jika kosong).
+    ```
+
+    DELETE Query / Body:
+    `?product_id=<id>` atau `{"product_id": "all"}` untuk menghapus semua konteks produk.
+
+    Args:
+        request (HttpRequest): Request pengguna (harus merupakan buyer atau seller dari sesi tersebut).
+        session_id (str|UUID): ID percakapan target.
+
+    Returns:
+        JsonResponse: Daftar konteks produk terbaru (`all_product_contexts`) dan status operasi.
     """
     session = get_object_or_404(ChatSession, id=session_id)
     if request.user not in (session.buyer, session.seller):
@@ -451,7 +573,21 @@ def add_product_context_api(request, session_id):
 @login_required
 def delete_product_context_api(request, session_id):
     """
-    POST atau DELETE: Hapus konteks produk (spesifik via ?product_id=... / body JSON, atau semua).
+    Endpoint alternatif untuk menghapus satu atau seluruh konteks produk dari percakapan.
+
+    Metode: POST | DELETE
+    Endpoint: `/chat/api/sessions/<session_id>/products/delete/`
+
+    Parameter:
+    - Query string `?product_id=1` atau JSON body `{"product_id": "1"}`: Hapus 1 produk spesifik.
+    - `product_id="all"` atau tanpa parameter: Hapus semua konteks produk dari sesi ini.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan target.
+
+    Returns:
+        JsonResponse: Konfirmasi penghapusan dan daftar konteks produk tersisa.
     """
     if request.method not in ("POST", "DELETE"):
         return _json_error("Hanya metode POST atau DELETE yang diizinkan.", status=405)
@@ -491,8 +627,22 @@ def delete_product_context_api(request, session_id):
 @login_required
 def search_sellers_api(request):
     """
-    GET: Pencarian toko penjual dengan AJAX debounce atau toko random bila query kosong.
-    Query params: ?q=...
+    Mencari toko penjual dengan pencarian teks (AJAX debounce) atau menyajikan rekomendasi toko acak bila query kosong.
+
+    Metode: GET
+    Endpoint: `/chat/api/sellers/search/?q=<query>`
+
+    Alur:
+    1. Filter pengguna yang memiliki peran `seller` atau profil seller, kecuali diri sendiri.
+    2. Jika terdapat parameter `q`, cari berdasarkan nama toko, nama penjual, username, atau email (limit 15).
+    3. Jika `q` kosong, ambil 10 toko acak (`order_by('?')`) sebagai rekomendasi cepat bagi pembeli.
+    4. Hitung inisial huruf untuk avatar antarmuka.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        JsonResponse: Daftar penjual berformat `{"status": "success", "sellers": [...]}`.
     """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
@@ -541,7 +691,37 @@ def search_sellers_api(request):
 
 @login_required
 def send_ai_message_api(request, session_id):
+    """
+    Mengirimkan pertanyaan pembeli ke asisten AI bot toko dan memproses balasannya.
 
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/ai-send/`
+
+    Payload JSON:
+    ```json
+    {"content": "Berapa lama daya tahan sabun bambu ini?"}
+    ```
+
+    Alur:
+    1. Validasi sesi bertipe `TYPE_AI` dan pengirim adalah pembeli sesi ini.
+    2. Simpan pesan pembeli ke database (`ChatMessage`).
+    3. Cek jam operasional toko (`_is_store_open`):
+       Jika toko tutup dan auto reply aktif, balas dengan `closed_message`.
+    4. Ambil basis pengetahuan Q&A (`ProductKnowledge`) dan katalog produk aktif penjual (`Product`).
+    5. Susun system prompt (`build_system_prompt`) serta riwayat percakapan terakhir (sliding window 8 pesan).
+    6. Hubungi API OpenRouter (`query_openrouter`).
+       - Jika API error/gagal: lakukan fallback otomatis handover ke penjual (`_transfer_to_direct_session`).
+    7. Analisis balasan AI (`parse_handover_signal`):
+       - Jika terdeteksi tag `[HANDOVER_SELLER]`: alihkan sesi ke penjual dan teruskan pertanyaan pembeli.
+       - Jika jawaban valid: simpan pesan AI ke database dan kembalikan ke frontend pembeli.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan AI target.
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi teks balasan AI atau status handover.
+    """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -687,7 +867,25 @@ def send_ai_message_api(request, session_id):
 
 @login_required
 def escalate_to_seller_api(request, session_id):
+    """
+    Mengalihkan sesi AI aktif ke ruang obrolan langsung (direct chat) dengan penjual atas permintaan pembeli.
 
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/escalate-to-seller/`
+
+    Alur:
+    1. Validasi sesi bertipe AI dan pengirim adalah pembeli.
+    2. Panggil helper `_transfer_to_direct_session(reason=HANDOVER_MANUAL)`.
+    3. Seluruh riwayat obrolan AI disalin ke sesi direct baru.
+    4. Sesi AI lama ditandai `resolved`.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan AI target.
+
+    Returns:
+        JsonResponse: Detail status keberhasilan dan `direct_session_id` untuk redirect frontend.
+    """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -714,8 +912,23 @@ def escalate_to_seller_api(request, session_id):
 @login_required
 def switch_to_ai_session_api(request, session_id):
     """
-    POST: Mengalihkan sesi obrolan langsung (direct) kembali ke sesi asisten AI bot.
-    Riwayat obrolan pembeli dan penjual tetap dipertahankan.
+    Mengalihkan sesi obrolan langsung (direct) kembali ke sesi asisten AI bot toko.
+
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/switch-to-ai/`
+
+    Alur:
+    1. Validasi sesi bertipe direct dan pengirim adalah pembeli.
+    2. Panggil helper `_transfer_to_ai_session(direct_session)`.
+    3. Seluruh riwayat pesan direct disalin ke sesi AI baru.
+    4. Sesi direct lama ditandai `resolved`.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan direct target.
+
+    Returns:
+        JsonResponse: Detail status keberhasilan dan `ai_session_id` untuk redirect frontend.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -746,7 +959,26 @@ def switch_to_ai_session_api(request, session_id):
 
 @login_required
 def get_session_messages_api(request, session_id):
+    """
+    Mengambil seluruh pesan dalam suatu sesi obrolan (AI atau Direct), serta memperbarui status baca pesan.
 
+    Metode: GET
+    Endpoint: `/chat/api/sessions/<session_id>/messages/`
+
+    Alur:
+    1. Validasi hak akses (harus buyer atau seller dari sesi tersebut, atau admin/staff).
+    2. Menandai pesan masuk yang belum dibaca sebagai `is_read=True`:
+       - Jika pembeli membuka: tandai pesan seller/AI sebagai terbaca.
+       - Jika penjual membuka: tandai pesan buyer sebagai terbaca.
+    3. Serialisasi daftar pesan, info metadata sesi, konteks produk, dan data rating (jika ada).
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan target.
+
+    Returns:
+        JsonResponse: Detail lengkap sesi dan array pesan (`messages`).
+    """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
 
@@ -814,7 +1046,28 @@ def get_session_messages_api(request, session_id):
 @login_required
 def send_direct_message_api(request, session_id):
     """
-    Payload: {"content": "ini chat ke penjual"}
+    Mengirimkan pesan pada sesi obrolan langsung manusia (direct chat antara penjual dan pembeli).
+
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/direct-send/`
+
+    Payload JSON:
+    ```json
+    {"content": "Halo kak, stok barang ini ready banyak ya."}
+    ```
+
+    Alur:
+    1. Validasi sesi bertipe `TYPE_DIRECT` dan pengguna merupakan partisipan sah.
+    2. Tentukan `sender_type`: 'buyer' jika pengirim adalah pembeli, atau 'seller' jika penjual.
+    3. Simpan pesan baru ke database (`ChatMessage`).
+    4. Perbarui timestamp sesi `updated_at`.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan direct target.
+
+    Returns:
+        JsonResponse: Objek pesan yang baru tersimpan (`message`).
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -865,7 +1118,22 @@ def send_direct_message_api(request, session_id):
 @login_required
 def toggle_archive_session_api(request, session_id):
     """
-    POST: Mengarsipkan atau membatalkan arsip sesi chat.
+    Mengubah status arsip (archive / unarchive) sesi obrolan secara independen untuk buyer atau seller.
+
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/archive/`
+
+    Alur:
+    - Jika pembeli yang memanggil: toggle kolom `is_archived_by_buyer`.
+    - Jika penjual yang memanggil: toggle kolom `is_archived_by_seller`.
+    - Mengarsipkan tidak menghapus obrolan dan tidak mempengaruhi tampilan pihak lawan.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        session_id (str|UUID): ID percakapan target.
+
+    Returns:
+        JsonResponse: Objek status arsip terbaru `{"status": "success", "is_archived": bool}`.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -890,9 +1158,26 @@ def toggle_archive_session_api(request, session_id):
 @login_required
 def buyer_inbox_sessions_api(request):
     """
-    GET: Daftar sesi chat pembeli sesuai filter tab:
-    ?tab=semua | belum_dibaca | diarsipkan
-    ?search=...
+    Mengambil daftar riwayat percakapan milik pembeli untuk ditampilkan pada sidebar inbox.
+
+    Metode: GET
+    Endpoint: `/chat/api/inbox/buyer/?tab=<tab>&search=<search>`
+
+    Filter Tab:
+    - `semua`: Sesi aktif (tidak diarsipkan) dan bukan sesi resolved.
+    - `belum_dibaca`: Sesi dengan pesan masuk dari seller/AI yang belum dibaca.
+    - `diarsipkan`: Sesi yang telah diarsipkan oleh pembeli.
+
+    Fitur Utama:
+    - Deduplikasi toko: Satu toko hanya muncul 1 kali (sesi paling mutakhir).
+    - Pencarian nama toko atau isi pesan terakhir.
+    - Hitung unread count dan lampirkan konteks produk terkait.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        JsonResponse: Objek respons JSON `{"status": "success", "sessions": [...]}`.
     """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
@@ -973,9 +1258,25 @@ def buyer_inbox_sessions_api(request):
 @login_required
 def seller_inbox_sessions_api(request):
     """
-    GET: Penjual melihat daftar sesi chat langsung dari para pembeli sesuai filter tab:
-    ?tab=semua | belum_dibaca | belum_dibalas
-    ?search=...
+    Mengambil daftar percakapan langsung pembeli pada dashboard inbox penjual.
+
+    Metode: GET
+    Endpoint: `/chat/api/inbox/seller/?tab=<tab>&search=<search>`
+
+    Filter Tab:
+    - `semua`: Seluruh sesi obrolan direct pembeli aktif.
+    - `belum_dibaca`: Sesi yang memiliki pesan pembeli berstatus `is_read=False`.
+    - `belum_dibalas`: Sesi di mana pesan terakhir dikirimkan oleh pembeli (belum ada balasan dari seller).
+
+    Fitur Utama:
+    - Deduplikasi buyer: Setiap pembeli unik hanya muncul 1 kali pada list (sesi paling baru).
+    - Pencarian nama pembeli atau isi pesan obrolan.
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+
+    Returns:
+        JsonResponse: Objek respons JSON `{"status": "success", "sessions": [...]}`.
     """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
@@ -1056,17 +1357,28 @@ def seller_inbox_sessions_api(request):
 @login_required
 def seller_chat_settings_api(request):
     """
-    GET: Mengambil pengaturan bot penjual (Pengaturan Sambutan).
-    POST / PUT / PATCH: Menyimpan perubahan pengaturan bot.
-    Payload:
+    Mengambil atau memperbarui pengaturan bot AI penjual (nama bot, pesan sambutan, pesan tutup, jam buka).
+
+    Metode: GET | POST | PUT | PATCH
+    Endpoint: `/chat/api/seller/settings/`
+
+    Payload Simpan (POST/PUT/PATCH):
+    ```json
     {
         "is_auto_reply_enabled": true,
         "bot_name": "EucalypBot",
-        "welcome_message": "Selamat datang di toko kami!",
+        "welcome_message": "Halo! Ada yang bisa kami bantu seputar produk kami?",
         "operating_hours_start": "08:00",
         "operating_hours_end": "19:00",
-        "closed_message": "Mohon maaf toko sedang tutup."
+        "closed_message": "Toko sedang tutup. Kami akan membalas di jam kerja."
     }
+    ```
+
+    Args:
+        request (HttpRequest): Request pengguna (harus login).
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi konfigurasi pengaturan bot terbaru.
     """
     settings_obj = _get_seller_chat_settings(request.user)
 
@@ -1132,8 +1444,30 @@ def seller_chat_settings_api(request):
 @login_required
 def seller_knowledge_list_create_api(request):
     """
-    GET: Melihat daftar Q&A yang dimiliki penjual. Opsional filter `?product_id=...`
-    POST: Menambahkan Q&A baru per produk atau umum toko (product_id opsional).
+    Melihat daftar Q&A bot yang dimiliki penjual (GET) atau menambahkan Q&A baru (POST).
+
+    Metode: GET | POST
+    Endpoint: `/chat/api/seller/knowledges/`
+
+    Query GET:
+    `?product_id=<id>` (opsional: filter kata kunci hanya untuk produk tertentu).
+
+    Payload POST:
+    ```json
+    {
+        "product_id": "1",
+        "product_name": "Sabun Bambu",
+        "question": "Apakah sabun ini bebas paraben?",
+        "answer": "Ya, 100% alami tanpa bahan kimia berbahaya.",
+        "is_active": true
+    }
+    ```
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+
+    Returns:
+        JsonResponse: Daftar Q&A (`knowledges`) atau entri Q&A baru yang berhasil disimpan.
     """
     seller = request.user
 
@@ -1201,7 +1535,17 @@ def seller_knowledge_list_create_api(request):
 @login_required
 def seller_knowledge_detail_api(request, pk):
     """
-    GET, PUT/PATCH, DELETE: Mengelola entri Q&A individual milik penjual.
+    Mengambil detail (GET), mengubah (PUT/PATCH), atau menghapus (DELETE) satu entri Q&A bot.
+
+    Metode: GET | PUT | PATCH | DELETE
+    Endpoint: `/chat/api/seller/knowledges/<pk>/`
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual pemilik Q&A).
+        pk (int): Primary key ID dari entri `ProductKnowledge`.
+
+    Returns:
+        JsonResponse: Detail data Q&A atau notifikasi penghapusan.
     """
     item = get_object_or_404(ProductKnowledge, id=pk, seller=request.user)
 
@@ -1262,7 +1606,19 @@ def seller_knowledge_detail_api(request, pk):
 
 @login_required
 def seller_knowledge_toggle_api(request, pk):
+    """
+    Mengubah switch status aktif/nonaktif (`is_active`) untuk suatu entri Q&A bot penjual.
 
+    Metode: POST
+    Endpoint: `/chat/api/seller/knowledges/<pk>/toggle/`
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+        pk (int): Primary key ID dari entri `ProductKnowledge`.
+
+    Returns:
+        JsonResponse: Objek status aktif terbaru `{"status": "success", "is_active": bool}`.
+    """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -1285,7 +1641,25 @@ def seller_knowledge_toggle_api(request, pk):
 @login_required
 def submit_session_rating_api(request, session_id):
     """
-    Payload: {"rating": 5, "feedback": "Penjual sangat ramah!"}
+    Mengirimkan penilaian bintang (1-5) dan ulasan teks kepuasan pembeli terhadap sesi percakapan.
+
+    Metode: POST
+    Endpoint: `/chat/api/sessions/<session_id>/rating/`
+
+    Payload JSON:
+    ```json
+    {
+        "rating": 5,
+        "feedback": "Penjual sangat ramah dan responsif!"
+    }
+    ```
+
+    Args:
+        request (HttpRequest): Request pengguna (harus merupakan pembeli pada sesi tersebut).
+        session_id (str|UUID): ID percakapan target.
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi data rating yang tersimpan.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -1333,12 +1707,25 @@ def submit_session_rating_api(request, session_id):
 @login_required
 def submit_user_report_api(request):
     """
-    Payload:
+    Mengirimkan laporan pelanggaran akun pengguna (pembeli melaporkan penjual, atau penjual melaporkan pembeli).
+
+    Metode: POST
+    Endpoint: `/chat/api/reports/`
+
+    Payload JSON:
+    ```json
     {
         "reported_user_id": 2,
-        "session_id": "<uuid-optional>",
-        "reason": "Pembeli berkata kasar dan tidak sopan."
+        "session_id": "060d40aa-...",
+        "reason": "Pengguna menggunakan kata-kata kasar yang menyinggung."
     }
+    ```
+
+    Args:
+        request (HttpRequest): Request pengguna (pelapor).
+
+    Returns:
+        JsonResponse: Konfirmasi pengiriman laporan (`report_id`) dan status HTTP 201 Created.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -1382,6 +1769,10 @@ def submit_user_report_api(request):
 # ==============================================================================
 
 def _ensure_all_sellers_have_broadcast_channels():
+    """
+    Helper untuk memastikan setiap user dengan role 'seller' otomatis memiliki tepat 1 BroadcastChannel resmi.
+    Dipanggil saat membuka halaman siaran atau mengambil daftar channel.
+    """
     sellers = User.objects.filter(role="seller").exclude(broadcast_channel__isnull=False)
     for s in sellers:
         store_name = _get_seller_store_name(s)
@@ -1398,6 +1789,23 @@ def _ensure_all_sellers_have_broadcast_channels():
 
 @login_required
 def list_broadcast_channels_api(request):
+    """
+    Mengambil daftar saluran broadcast (pengumuman toko).
+
+    Metode: GET
+    Endpoint: `/chat/api/broadcast/channels/?tab=<tab>&search=<search>`
+
+    Logika Penyortiran Khusus:
+    - Jika pengguna yang login adalah seller, channel miliknya sendiri diposisikan di urutan paling atas (`my_channel`).
+    - Channel seller lain dikelompokkan terpisah (`other_channels`).
+    - Filter tab 'semua' atau 'diarsipkan'.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi `my_channel`, `other_channels`, dan `channels`.
+    """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
 
@@ -1462,6 +1870,19 @@ def list_broadcast_channels_api(request):
 
 @login_required
 def toggle_archive_broadcast_channel_api(request, channel_id):
+    """
+    Mengarsipkan atau membatalkan arsip saluran siaran untuk pengguna saat ini.
+
+    Metode: POST
+    Endpoint: `/chat/api/broadcast/channels/<channel_id>/archive/`
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        channel_id (int): ID saluran broadcast.
+
+    Returns:
+        JsonResponse: Status arsip terbaru `{"status": "success", "is_archived": bool}`.
+    """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
 
@@ -1483,7 +1904,24 @@ def toggle_archive_broadcast_channel_api(request, channel_id):
 
 @login_required
 def get_broadcast_messages_api(request, channel_id):
+    """
+    Mengambil seluruh pesan siaran pada suatu channel dan menaikkan hitungan viewed_count.
 
+    Metode: GET
+    Endpoint: `/chat/api/broadcast/channels/<channel_id>/messages/`
+
+    Fitur:
+    - Jika pengguna yang membaca bukan pemilik (seller) channel tersebut,
+      naikkan hitungan `viewed_count` secara atomik (`F('viewed_count') + 1`).
+    - Kembalikan status kepemilikan `is_owner`.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        channel_id (int): ID saluran broadcast.
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi detail channel dan array pesan siaran.
+    """
     if request.method != "GET":
         return _json_error("Hanya metode GET yang diizinkan.", status=405)
 
@@ -1522,7 +1960,26 @@ def get_broadcast_messages_api(request, channel_id):
 @login_required
 def send_broadcast_message_api(request, channel_id):
     """
-    Payload: {"content": "Promo 10% Sandal Akupuntur hari ini!"}
+    Mengirimkan pesan siaran / pengumuman baru ke saluran broadcast (khusus pemilik channel).
+
+    Metode: POST
+    Endpoint: `/chat/api/broadcast/channels/<channel_id>/messages/`
+
+    Payload JSON:
+    ```json
+    {"content": "Dapatkan diskon 20% produk organik akhir pekan ini!"}
+    ```
+
+    Keamanan:
+    - Hanya user yang merupakan penjual pemilik channel (`request.user == channel.seller`)
+      yang diperkenankan memposting pesan broadcast. User lain akan ditolak dengan HTTP 403 Forbidden.
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual pemilik channel).
+        channel_id (int): ID saluran broadcast.
+
+    Returns:
+        JsonResponse: Pesan siaran baru yang tersimpan (`message`) dan status HTTP 201 Created.
     """
     if request.method != "POST":
         return _json_error("Hanya metode POST yang diizinkan.", status=405)
@@ -1563,6 +2020,20 @@ def send_broadcast_message_api(request, channel_id):
 
 @login_required
 def buyer_chat_view(request):
+    """
+    Menampilkan antarmuka obrolan utama untuk pembeli (Screen 1-6 Figma).
+
+    Konteks Template:
+    - `sellers`: Daftar seluruh penjual untuk autocomplete popup pencarian.
+    - `initial_seller_id`, `initial_product_id`, `initial_product_name`: Parameter query URL jika pembeli
+      datang dari tombol "Chat Penjual" di halaman katalog produk.
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        HttpResponse: Template HTML yang dirender (`chat/buyer_chat.html`).
+    """
     sellers_qs = User.objects.filter(role="seller").exclude(id=request.user.id)
     sellers = [
         {
@@ -1586,6 +2057,15 @@ def buyer_chat_view(request):
 
 @login_required
 def seller_chat_view(request):
+    """
+    Menampilkan antarmuka inbox obrolan langsung untuk penjual (Screen 10-12 Figma).
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+
+    Returns:
+        HttpResponse: Template HTML yang dirender (`chat/seller_chat.html`).
+    """
     context = {
         "active_nav": "chat",
         "is_seller_mode": True,
@@ -1595,6 +2075,15 @@ def seller_chat_view(request):
 
 @login_required
 def seller_settings_view(request):
+    """
+    Menampilkan antarmuka pengaturan bot sambutan & jam operasional toko penjual (Screen 13 Figma).
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+
+    Returns:
+        HttpResponse: Template HTML yang dirender (`chat/seller_settings.html`).
+    """
     chat_settings = _get_seller_chat_settings(request.user)
     context = {
         "active_nav": "settings",
@@ -1609,6 +2098,15 @@ def seller_settings_view(request):
 
 @login_required
 def seller_keywords_view(request):
+    """
+    Menampilkan antarmuka pengelolaan kata kunci & Q&A basis pengetahuan bot AI toko (Screen 14 Figma).
+
+    Args:
+        request (HttpRequest): Request pengguna (penjual).
+
+    Returns:
+        HttpResponse: Template HTML yang dirender (`chat/seller_keywords.html`).
+    """
     chat_settings = _get_seller_chat_settings(request.user)
     knowledges = ProductKnowledge.objects.filter(seller=request.user)
     context = {
@@ -1623,6 +2121,15 @@ def seller_keywords_view(request):
 
 @login_required
 def broadcast_view(request):
+    """
+    Menampilkan antarmuka saluran siaran / pengumuman (Screen 9 Figma).
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        HttpResponse: Template HTML yang dirender (`chat/broadcast.html`).
+    """
     _ensure_all_sellers_have_broadcast_channels()
     is_seller = getattr(request.user, "role", "") == "seller"
     context = {

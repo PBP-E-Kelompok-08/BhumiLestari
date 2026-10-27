@@ -5,6 +5,11 @@ from django.conf import settings
 
 
 class ProductKnowledge(models.Model):
+    """
+    Model basis pengetahuan (knowledge base) Q&A toko dan produk.
+    Digunakan sebagai rujukan jawaban resmi penjual yang akan disuntikkan
+    ke dalam system prompt AI Assistant (EucalypBot / BhumiBot).
+    """
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -22,11 +27,19 @@ class ProductKnowledge(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
+        """Representasi string untuk entri pengetahuan produk/toko."""
         target = self.product_name or self.product_id or "Umum Toko"
         return f"[{target}] {self.question}"
 
 
 class ChatSession(models.Model):
+    """
+    Model sesi percakapan antara Pembeli (buyer) dan Penjual (seller).
+    Mendukung dua tipe sesi:
+    1. 'ai'     : Obrolan pembeli dengan bot AI asisten toko.
+    2. 'direct' : Obrolan langsung pembeli dengan penjual manusia.
+    Menyimpan relasi origin_session untuk melacak riwayat eskalasi (handover).
+    """
     TYPE_AI = 'ai'
     TYPE_DIRECT = 'direct'
 
@@ -87,10 +100,16 @@ class ChatSession(models.Model):
         ordering = ['-updated_at']
 
     def __str__(self):
+        """Representasi string sesi obrolan (tipe sesi, pembeli -> penjual, dan status)."""
         return f"[{self.session_type.upper()}] {self.buyer.email} -> {self.seller.email} ({self.status})"
 
 
 class SessionProductContext(models.Model):
+    """
+    Model konteks produk yang sedang dibahas dalam suatu sesi percakapan.
+    Ditampilkan sebagai chip produk di bawah header chat dan disuntikkan
+    ke dalam konteks prompt AI.
+    """
     session = models.ForeignKey(
         ChatSession,
         on_delete=models.CASCADE,
@@ -105,10 +124,17 @@ class SessionProductContext(models.Model):
         ordering = ['added_at']
 
     def __str__(self):
+        """Representasi string konteks produk untuk sesi terkait."""
         return f"Sesi {self.session_id} - Produk: {self.product_name or self.product_id}"
 
 
 class ChatMessage(models.Model):
+    """
+    Model pesan individual di dalam suatu sesi obrolan.
+    Mencakup pengirim (buyer, seller, ai, system), penanda dibaca (is_read),
+    serta flag is_inherited_from_ai untuk menandai pesan riwayat AI
+    yang disalin saat eskalasi ke direct session.
+    """
     SENDER_BUYER = 'buyer'
     SENDER_SELLER = 'seller'
     SENDER_AI = 'ai'
@@ -146,6 +172,7 @@ class ChatMessage(models.Model):
         ordering = ['created_at']
 
     def __str__(self):
+        """Representasi string pesan (potongan teks dan tipe pengirim)."""
         prefix = "[AI Hist]" if self.is_inherited_from_ai else f"[{self.sender_type}]"
         return f"{prefix} {self.content[:35]}..."
 
@@ -179,10 +206,15 @@ class SellerChatSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
+        """Representasi string untuk pengaturan bot penjual."""
         return f"Settings {self.seller.email} (Bot: {self.bot_name})"
 
 
 class SessionRating(models.Model):
+    """
+    Model ulasan & rating bintang (1 sampai 5) untuk sesi percakapan.
+    Diisi oleh pembeli melalui popup rating (Screen 7).
+    """
     session = models.OneToOneField(
         ChatSession,
         on_delete=models.CASCADE,
@@ -197,10 +229,16 @@ class SessionRating(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Representasi string rating sesi percakapan."""
         return f"Rating {self.rating}★ untuk Sesi {self.session_id}"
 
 
 class UserReport(models.Model):
+    """
+    Model laporan aduan pengguna (moderasi obrolan).
+    Dapat diajukan oleh pembeli terhadap penjual (Screen 8)
+    maupun oleh penjual terhadap pembeli.
+    """
     reporter = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -222,10 +260,16 @@ class UserReport(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Representasi string laporan pengguna."""
         return f"Report dari {self.reporter.email} terhadap {self.reported_user.email}"
 
 
 class BroadcastChannel(models.Model):
+    """
+    Model saluran siaran toko (Broadcast Channel).
+    Tiap penjual memiliki tepat satu channel resmi untuk menyiarkan
+    pengumuman produk, diskon, atau info toko kepada para pengikut.
+    """
     seller = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -242,10 +286,15 @@ class BroadcastChannel(models.Model):
     )
 
     def __str__(self):
+        """Representasi string nama saluran siaran."""
         return self.name
 
 
 class BroadcastMessage(models.Model):
+    """
+    Model pesan siaran individual yang dikirim oleh pemilik toko
+    ke dalam BroadcastChannel miliknya.
+    """
     channel = models.ForeignKey(
         BroadcastChannel,
         on_delete=models.CASCADE,
@@ -259,6 +308,7 @@ class BroadcastMessage(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
+        """Representasi string pesan siaran."""
         return f"[{self.channel.name}] {self.content[:35]}..."
 
 
@@ -269,6 +319,11 @@ from django.apps import apps
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def ensure_broadcast_channel_for_seller_user(sender, instance, created, **kwargs):
+    """
+    Signal receiver Django (post_save pada User).
+    Menjamin bahwa setiap pengguna dengan role='seller' otomatis
+    memiliki tepat 1 saluran siaran resmi (BroadcastChannel).
+    """
     if getattr(instance, "role", "") == "seller":
         store_name = instance.full_name or (instance.email.split("@")[0] if instance.email else "Toko Penjual")
         if hasattr(instance, "seller_profile") and instance.seller_profile:
