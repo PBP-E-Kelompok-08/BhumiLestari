@@ -116,6 +116,7 @@ p {
     cursor: pointer;
 }
 
+.sidebar-avatar,
 .nav-avatar {
     flex-shrink: 0;
     display: block;
