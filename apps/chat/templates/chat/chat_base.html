@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Chat - BhumiLestari{% endblock title %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Changa:wght@400;500;600;700;800&family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'chat/css/chat.css' %}">
+    {% block extra_head %}{% endblock extra_head %}
+</head>
+<body class="chat-page-body">
+    <div id="chatShell" class="chat-shell">
+        {% include "chat/components/icon_rail.html" %}
+
+        <aside class="chat-left-panel" aria-label="Daftar Percakapan dan Menu">
+            <div class="chat-brand-header">
+                <a href="{% url 'dashboard:show_dashboard_home' %}" class="chat-brand-link" title="Kembali ke Beranda BhumiLestari">
+                    <img src="{% static 'img/logo.png' %}" alt="Logo BhumiLestari" class="chat-brand-logo">
+                    <span class="chat-brand-title">BhumiLestari</span>
+                </a>
+                {% block brand_header_action %}{% endblock brand_header_action %}
+            </div>
+
+            {% block left_panel_content %}{% endblock left_panel_content %}
+        </aside>
+
+        <main class="chat-main-area">
+            {% block main_area_content %}{% endblock main_area_content %}
+        </main>
+    </div>
+
+    <div id="chatToast" class="chat-toast" role="status" aria-live="polite" hidden></div>
+
+    {% block modals %}{% endblock modals %}
+
+    <script src="{% static 'chat/js/chat_core.js' %}"></script>
+    {% block scripts %}{% endblock scripts %}
+</body>
+</html>
+

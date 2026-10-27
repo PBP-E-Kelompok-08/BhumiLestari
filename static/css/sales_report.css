@@ -1,0 +1,91 @@
+.report-page {
+  padding: 2rem;
+  background: #eaf3d1;
+  color: #4d6b5e;
+  font-family: "Prompt", sans-serif;
+}
+
+.page-title {
+  margin: 0 0 1rem;
+  font-family: "Changa", sans-serif;
+  font-size: 2.25rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.filter {
+  padding: 0.5rem 1.5rem;
+  background: #d9d9d9;
+  border-radius: 50px;
+  color: #4d6b5e;
+  text-decoration: none;
+}
+
+.is-active {
+  background: #4d6b5e;
+  color: white;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.card {
+  padding: 1.25rem 1.5rem;
+  background: white;
+}
+
+.card span {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.card strong {
+  display: block;
+  margin-top: 0.5rem;
+  font-family: "Changa", sans-serif;
+  font-size: 1.75rem;
+}
+
+.section-title {
+  margin: 2rem 0 0.5rem;
+  font-family: "Changa", sans-serif;
+  font-size: 1.15rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.products {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 0.5rem;
+}
+
+.products th {
+  padding: 1rem 1.5rem;
+  background: white;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.products td {
+  padding: 1rem 1.5rem;
+  background: white;
+  text-align: left;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}

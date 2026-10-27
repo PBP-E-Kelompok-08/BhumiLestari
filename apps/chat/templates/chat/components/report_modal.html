@@ -1,0 +1,20 @@
+<div id="reportModalBackdrop" class="chat-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle" hidden>
+    <div class="chat-modal-dialog">
+        <button type="button" class="chat-modal-close" id="closeReportModalBtn" aria-label="Tutup dialog laporan">&times;</button>
+        <h2 id="reportModalTitle" class="chat-modal-title">Laporkan Pengguna Ini</h2>
+
+        <form id="reportModalForm">
+            <input type="hidden" id="reportedUserIdInput" name="reported_user_id" value="">
+
+            <label for="reportReasonInput" class="chat-modal-label">Alasan pelaporan:</label>
+            <textarea id="reportReasonInput"
+                      name="reason"
+                      class="chat-modal-textarea"
+                      placeholder="Masukkan alasan pelaporan Anda..."
+                      required></textarea>
+
+            <button type="submit" id="submitReportBtn" class="chat-modal-submit-btn">Laporkan</button>
+        </form>
+    </div>
+</div>
+

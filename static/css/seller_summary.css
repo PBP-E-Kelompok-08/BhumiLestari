@@ -1,0 +1,128 @@
+.summary-page {
+  padding: 2rem;
+  background: #eaf3d1;
+  color: #4d6b5e;
+  font-family: "Prompt", sans-serif;
+}
+
+.page-title {
+  margin: 0 0 1.5rem;
+  font-family: "Changa", sans-serif;
+  font-size: 2.25rem;
+}
+
+.card {
+  padding: 1.25rem 1.5rem;
+  background: white;
+}
+
+.card-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.stats span {
+  display: block;
+}
+
+.stats strong {
+  font-family: "Changa", sans-serif;
+  font-size: 2rem;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.side {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  height: 15rem;
+  margin-bottom: 1.75rem;
+  border-left: 1px solid #aaa;
+  border-bottom: 1px solid #aaa;
+}
+
+.bar {
+  position: relative;
+  flex: 1;
+  background: #9e8b7a;
+}
+
+.bar-top {
+  background: #d48c56;
+}
+
+.bar small {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+.bar-value {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 100%;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.favorites {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.favorites li {
+  padding-left: 0.25rem;
+}
+
+.favorites span {
+  display: inline-block;
+  width: 70%;
+}
+
+.stars {
+  font-size: 2rem;
+  letter-spacing: 0.1rem;
+  color: #ffe14d;
+}
+
+.stars span {
+  color: #ece8d0;
+}
+
+.rating-text {
+  margin: 0.5rem 0 0;
+}
+
+@media (max-width: 600px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}

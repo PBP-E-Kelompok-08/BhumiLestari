@@ -10,39 +10,39 @@
 
         {% if user.is_superuser %}
             <li>
-                <a href="#">
+                <a href="{% url 'products:verification_queue' %}">
                 <img class="sidebar-logo" src="{% static 'img/manage_toko.png' %}" alt="Logo manajemen toko">
-                Manajemen Toko</a>
+                Manajemen Produk Toko</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'chat:seller_chat' %}">
                 <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo manajemen chat">
                 Manajemen Chat</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:sales_report' %}">
                 <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan keuangan">
                 Laporan Keuangan</a>
             </li>
 
         {% elif user.role == "seller" %}
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:seller_summary' %}">
                     <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ringkasan">
                     Ringkasan</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:order_list' %}">
                     <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo pesanan">
                     Pesanan</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:sales_report' %}">
                 <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan penjualan">
                 Laporan Penjualan</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'chat:seller_chat' %}">
                 <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo chat">
                 Chat</a>
             </li>
@@ -54,12 +54,12 @@
                     Keranjang</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'chat:buyer_chat' %}">
                 <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo chat">
                 Chat</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:order_list' %}">
                 <img class="sidebar-logo" src="{% static 'img/riwayat_beli.png' %}" alt="Logo riwayat beli">
                 Riwayat Pembelian</a>
             </li>
