@@ -165,6 +165,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTION' : {'min_length' : 8}
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -214,3 +215,5 @@ MOCK_API_BASE_URL = os.environ.get(
     "MOCK_API_BASE_URL",
     "https://alfarrel-ersya-bhumilestari-mockapi.pws.cs.ui.ac.id",
 )
+
+LOGIN_URL = 'users:login'
