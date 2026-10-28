@@ -96,7 +96,7 @@ WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
-POSTGRES_SCHEMA = os.getenv('SCHEMA', 'bhumilestari')
+POSTGRES_SCHEMA = os.getenv('SCHEMA') or 'bhumilestari'
 
 if PRODUCTION:
     DATABASES = {
@@ -108,20 +108,38 @@ if PRODUCTION:
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT'),
             'OPTIONS': {
-                'options': f"-c search_path={POSTGRES_SCHEMA},public"
+                'options': f'-c search_path={POSTGRES_SCHEMA},public'
             }
         }
     }
 
     from django.db.backends.signals import connection_created
+    from django.db.models.signals import pre_migrate
+    from django.dispatch import receiver
 
-    def _ensure_postgres_schema(sender, connection, **kwargs):
-        if connection.vendor == 'postgresql':
-            with connection.cursor() as cursor:
-                cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
-                cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+    _schema_ensured = False
 
-    connection_created.connect(_ensure_postgres_schema, dispatch_uid="ensure_postgres_schema")
+    def _ensure_postgres_schema(connection):
+        global _schema_ensured
+        if _schema_ensured or connection.vendor != 'postgresql':
+            return
+        with connection.cursor() as cursor:
+            cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+            cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+        _schema_ensured = True
+
+    def _ensure_postgres_schema_on_connect(sender, connection, **kwargs):
+        _ensure_postgres_schema(connection)
+
+    connection_created.connect(
+        _ensure_postgres_schema_on_connect,
+        dispatch_uid='ensure_postgres_schema_on_connect',
+    )
+
+    @receiver(pre_migrate, dispatch_uid='ensure_postgres_schema_pre_migrate')
+    def _ensure_postgres_schema_pre_migrate(sender, app_config, verbosity, interactive, using, plan, apps, **kwargs):
+        from django.db import connections
+        _ensure_postgres_schema(connections[using])
 else:
     DATABASES = {
         'default': {
