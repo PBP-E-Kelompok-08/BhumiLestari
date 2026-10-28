@@ -114,39 +114,72 @@ if PRODUCTION:
     }
 
     from django.db.backends.signals import connection_created
-    from django.db.models.signals import pre_migrate
-    from django.dispatch import receiver
 
-    _schema_ensured = False
+    # ------------------------------------------------------------------
+    # PWS schema bootstrap.
+    #
+    # Runs at settings-import time over a raw psycopg2 connection, BEFORE
+    # any Django machinery (signals, migrate, gunicorn workers) touches the
+    # database. This cannot be skipped by signal timing issues or
+    # connection pooling. It prints progress so the deployment terminal
+    # shows exactly what happened.
+    # ------------------------------------------------------------------
+    def _bootstrap_postgres_schema():
+        import psycopg2
 
-    def _ensure_postgres_schema(connection):
-        global _schema_ensured
-        if _schema_ensured or connection.vendor != 'postgresql':
+        print(
+            '[schema-setup] PRODUCTION=True '
+            f'SCHEMA={POSTGRES_SCHEMA!r} DB_NAME={os.getenv("DB_NAME")!r} '
+            f'DB_USER={os.getenv("DB_USER")!r} DB_HOST={os.getenv("DB_HOST")!r} '
+            f'DB_PORT={os.getenv("DB_PORT")!r}'
+        )
+        try:
+            conn = psycopg2.connect(
+                dbname=os.getenv('DB_NAME'),
+                user=os.getenv('DB_USER'),
+                password=os.getenv('DB_PASSWORD'),
+                host=os.getenv('DB_HOST'),
+                port=os.getenv('DB_PORT'),
+                connect_timeout=15,
+            )
+            conn.autocommit = True
+            with conn.cursor() as cursor:
+                cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+                print(
+                    f'[schema-setup] CREATE SCHEMA IF NOT EXISTS '
+                    f'"{POSTGRES_SCHEMA}" -> OK'
+                )
+                cursor.execute(
+                    f'ALTER ROLE CURRENT_USER SET search_path TO '
+                    f'"{POSTGRES_SCHEMA}", public;'
+                )
+                print('[schema-setup] ALTER ROLE CURRENT_USER SET search_path -> OK')
+                cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+                cursor.execute('SHOW search_path;')
+                print(f'[schema-setup] search_path is now: {cursor.fetchone()[0]}')
+            conn.close()
+        except Exception as exc:
+            print(f'[schema-setup] FAILED ({exc.__class__.__name__}): {exc}')
+            print(
+                '[schema-setup] If this says "permission denied", the DB user '
+                'needs CREATE ON DATABASE (ask the DB admin) or a pre-created '
+                'schema.'
+            )
+
+    _bootstrap_postgres_schema()
+
+    def _set_session_search_path(sender, connection, **kwargs):
+        # Session-level safety net for every Django connection (covers poolers
+        # that ignore the startup `options` parameter).
+        if connection.vendor != 'postgresql':
             return
         with connection.cursor() as cursor:
-            # Create the schema if the role is allowed to (no-op if it exists).
-            cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
-            # Persist search_path at the role level so it survives connection
-            # pooling / DISCARD ALL (e.g. PgBouncer transaction mode).
-            cursor.execute(
-                f'ALTER ROLE CURRENT_USER SET search_path TO "{POSTGRES_SCHEMA}", public;'
-            )
-            # Apply it to the current session right away too.
             cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
-        _schema_ensured = True
-
-    def _ensure_postgres_schema_on_connect(sender, connection, **kwargs):
-        _ensure_postgres_schema(connection)
 
     connection_created.connect(
-        _ensure_postgres_schema_on_connect,
-        dispatch_uid='ensure_postgres_schema_on_connect',
+        _set_session_search_path,
+        dispatch_uid='set_session_search_path_on_connect',
     )
-
-    @receiver(pre_migrate, dispatch_uid='ensure_postgres_schema_pre_migrate')
-    def _ensure_postgres_schema_pre_migrate(sender, app_config, verbosity, interactive, using, plan, apps, **kwargs):
-        from django.db import connections
-        _ensure_postgres_schema(connections[using])
 else:
     DATABASES = {
         'default': {
