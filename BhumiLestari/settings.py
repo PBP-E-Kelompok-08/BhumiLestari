@@ -96,6 +96,8 @@ WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
+POSTGRES_SCHEMA = os.getenv('SCHEMA', 'bhumilestari')
+
 if PRODUCTION:
     DATABASES = {
         'default': {
@@ -106,10 +108,20 @@ if PRODUCTION:
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT'),
             'OPTIONS': {
-                'options': f"-c search_path={os.getenv('SCHEMA', 'public')}"
+                'options': f"-c search_path={POSTGRES_SCHEMA},public"
             }
         }
     }
+
+    from django.db.backends.signals import connection_created
+
+    def _ensure_postgres_schema(sender, connection, **kwargs):
+        if connection.vendor == 'postgresql':
+            with connection.cursor() as cursor:
+                cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+                cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+
+    connection_created.connect(_ensure_postgres_schema, dispatch_uid="ensure_postgres_schema")
 else:
     DATABASES = {
         'default': {
