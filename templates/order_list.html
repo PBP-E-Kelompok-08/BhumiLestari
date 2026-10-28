@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>Transaksi dan Pesanan - BhumiLestari</title>
+  <link rel="stylesheet" href="{% static 'css/order_list.css' %}">
+{% endblock meta %}
+
+{% block content %}
+<div class="trx-page">
+  <h1 class="page-title">Transaksi dan Pesanan</h1>
+
+  <div class="stats">
+    <div class="stat"><span>Pesanan Baru</span><strong>13</strong></div>
+    <div class="stat"><span>Pesanan Dikirim</span><strong>5</strong></div>
+    <div class="stat"><span>Pesanan Selesai Bulan Ini</span><strong>47</strong></div>
+  </div>
+
+  <div class="toolbar">
+    <nav class="filters" aria-label="Filter status">
+      <a href="?" class="filter is-active">Semua</a>
+      <a href="?status=baru" class="filter">Baru</a>
+      <a href="?status=dikirim" class="filter">Dikirim</a>
+      <a href="?status=selesai" class="filter">Selesai</a>
+    </nav>
+  </div>
+
+  <div class="table-wrap">
+    <table class="orders">
+      <thead>
+        <tr>
+          <th>No Pesanan</th>
+          <th>Pembeli</th>
+          <th>Produk</th>
+          <th>Total</th>
+          <th>Tanggal</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td># 1016</td>
+          <td>Anisa Rahman</td>
+          <td>Tas Kain (2)</td>
+          <td>Rp.48.000</td>
+          <td>27 Sept 2026</td>
+          <td><span class="badge badge-baru">Baru</span></td>
+          <td><a href="{% url 'checkout:order_detail' %}">Detail</a></td>
+        </tr>
+        <tr>
+          <td># 1015</td>
+          <td>Brian Sauri</td>
+          <td>Sikat gigi siwak (3)</td>
+          <td>Rp.37.000</td>
+          <td>27 Sept 2026</td>
+          <td><span class="badge badge-baru">Baru</span></td>
+          <td><a href="{% url 'checkout:order_detail' %}">Detail</a></td>
+        </tr>
+        <tr>
+          <td># 1014</td>
+          <td>Zendaya Rei</td>
+          <td>Sabun batang (3)</td>
+          <td>Rp.54.000</td>
+          <td>25 Sept 2026</td>
+          <td><span class="badge badge-dikirim">Dikirim</span></td>
+          <td><a href="{% url 'checkout:order_detail' %}">Detail</a></td>
+        </tr>
+        <tr>
+          <td># 1013</td>
+          <td>Ghal Amran</td>
+          <td>Toples kaca (1)</td>
+          <td>Rp.36.000</td>
+          <td>23 Sept 2026</td>
+          <td><span class="badge badge-selesai">Selesai</span></td>
+          <td><a href="{% url 'checkout:order_detail' %}">Detail</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock content %}

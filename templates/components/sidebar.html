@@ -20,26 +20,31 @@
                 Manajemen Chat</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:sales_report' %}">
                 <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan keuangan">
                 Laporan Keuangan</a>
             </li>
 
         {% elif user.role == "seller" %}
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:seller_summary' %}">
                     <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ringkasan">
                     Ringkasan</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:order_list' %}">
                     <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo pesanan">
                     Pesanan</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard:sales_report' %}">
                 <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan penjualan">
                 Laporan Penjualan</a>
+            </li>
+            <li>
+                <a href="{% url 'reviews:halaman_penjual' %}">
+                    <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ulasan toko">
+                    Ulasan Toko</a>
             </li>
             <li>
                 <a href="{% url 'chat:seller_chat' %}">
@@ -59,16 +64,23 @@
                 Chat</a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:order_list' %}">
                 <img class="sidebar-logo" src="{% static 'img/riwayat_beli.png' %}" alt="Logo riwayat beli">
                 Riwayat Pembelian</a>
+            </li>
+            <li>
+                <a href="{% url 'reviews:halaman_saya' %}">
+                    <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ulasan saya">
+                    Ulasan Saya</a>
             </li>
         {% endif %}
     </ul>
 
     {% if user.is_authenticated %}
         <div class="sidebar-user">
-            <img class="sidebar-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+            <img class="nav-avatar"
+                src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                alt="Logo akun">
 
             {% if user.is_superuser %}
                 <div class = "user-info"><strong>Admin</strong><br>Etmin</div>

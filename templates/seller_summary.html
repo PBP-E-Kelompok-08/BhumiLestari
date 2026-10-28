@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>Ringkasan - BhumiLestari</title>
+  <link rel="stylesheet" href="{% static 'css/seller_summary.css' %}">
+{% endblock meta %}
+
+{% block content %}
+<div class="summary-page">
+  <h1 class="page-title">Ringkasan Toko {{ name }}</h1>
+
+  <div class="stats">
+    <div class="card"><span>Jumlah Produk</span><strong>45</strong></div>
+    <div class="card"><span>Jumlah Pesanan</span><strong>10</strong></div>
+    <div class="card"><span>Pendapatan Bulan Ini</span><strong>Rp. 12.003.375</strong></div>
+  </div>
+
+  <div class="panels">
+    <section class="card">
+      <h2>Penjualan Seminggu Terakhir</h2>
+      <div class="chart">
+        <div class="bar" style="height: 75%"><small>Senin</small></div>
+        <div class="bar" style="height: 50%"><small>Selasa</small></div>
+        <div class="bar" style="height: 15%"><small>Rabu</small></div>
+        <div class="bar" style="height: 40%"><small>Kamis</small></div>
+        <div class="bar" style="height: 60%"><small>Jumat</small></div>
+        <div class="bar is-top" style="height: 95%" data-value="2,1 juta"><small>Sabtu</small></div>
+        <div class="bar" style="height: 70%"><small>Minggu</small></div>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="card">
+        <h2>Produk Terfavorit</h2>
+        <ol class="favorites">
+          <li><span>Pasta gigi siwak</span><small>92 terjual</small></li>
+          <li><span>Sedotan bambu</span><small>90 terjual</small></li>
+          <li><span>Sabun batang alami</span><small>65 terjual</small></li>
+        </ol>
+      </section>
+
+      {% include "reviews/_rating_toko.html" %}
+    </div>
+  </div>
+</div>
+{% endblock content %}
