@@ -124,7 +124,14 @@ if PRODUCTION:
         if _schema_ensured or connection.vendor != 'postgresql':
             return
         with connection.cursor() as cursor:
+            # Create the schema if the role is allowed to (no-op if it exists).
             cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+            # Persist search_path at the role level so it survives connection
+            # pooling / DISCARD ALL (e.g. PgBouncer transaction mode).
+            cursor.execute(
+                f'ALTER ROLE CURRENT_USER SET search_path TO "{POSTGRES_SCHEMA}", public;'
+            )
+            # Apply it to the current session right away too.
             cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
         _schema_ensured = True
 
