@@ -54,7 +54,7 @@
 
         {% elif user.role == "buyer" %}
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:show_cart' %}">
                     <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo keranjang">
                     Keranjang</a>
             </li>
