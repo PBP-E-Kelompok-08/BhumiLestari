@@ -6,6 +6,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from apps.users.models import SellerProfile
 from .models import Product
+from .views import kirim_ke_api,cek_status
+import requests
+from unittest.mock import patch, MagicMock
 
 User = get_user_model()
 
@@ -123,3 +126,92 @@ class ProductTest(TestCase):
         self.client.login(username="seller1@gmail.com", password="pass")
         response = self.client.get(reverse("products:edit_product", args=[uuid.uuid4()]))
         self.assertEqual(response.status_code, 404)
+
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.post")
+    def test_kirim_ke_api_berhasil(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"data": {"product_id": "prd-001"}}
+        mock_post.return_value = mock_response
+
+        hasil = kirim_ke_api(self.produk)
+
+        self.assertTrue(hasil)
+        self.produk.refresh_from_db()
+        self.assertEqual(self.produk.external_product_id, "prd-001")
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.post")
+    def test_kirim_ke_api_status_bukan_201(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=400)
+
+        hasil = kirim_ke_api(self.produk)
+        self.assertFalse(hasil)
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.post")
+    def test_kirim_ke_api_error_koneksi(self, mock_post):
+        mock_post.side_effect = requests.exceptions.ConnectionError()
+
+        hasil = kirim_ke_api(self.produk)
+        self.assertFalse(hasil)
+
+    @patch("apps.products.views.kirim_ke_api")
+    def test_cek_status_tanpa_external_id(self, mock_kirim):
+        cek_status(self.produk)
+        mock_kirim.assert_called_once_with(self.produk)
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.get")
+    def test_cek_status_update_status(self, mock_get):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {"verification": {"status": "verified", "summary": "Sesuai datanya"}}
+        }
+        mock_get.return_value = mock_response
+
+        cek_status(self.produk)
+        self.produk.refresh_from_db()
+        self.assertEqual(self.produk.status, "verified")
+        self.assertEqual(self.produk.verification_summary, "Sesuai datanya")
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.get")
+    def test_cek_status_verification_kosong(self, mock_get):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"verification": None}}
+        mock_get.return_value = mock_response
+
+        cek_status(self.produk)
+        self.produk.refresh_from_db()
+        self.assertEqual(self.produk.status, "pending")
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.get")
+    def test_cek_status_bukan_200(self, mock_get):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save()
+        mock_get.return_value = MagicMock(status_code=404)
+
+        cek_status(self.produk)
+        self.produk.refresh_from_db()
+        self.assertEqual(self.produk.status, "pending")
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.get")
+    def test_cek_status_error_koneksi(self, mock_get):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save()
+        mock_get.side_effect = requests.exceptions.ConnectionError()
+
+        cek_status(self.produk)
+        self.produk.refresh_from_db()
+        self.assertEqual(self.produk.status, "pending")
