@@ -77,10 +77,10 @@ body {
     height: 3rem;
 }
 
-.notif,
+/* .notif,
 .question {
     height: 1.5rem;
-}
+} */
 
 .menu {
     height: 1.5rem;
@@ -192,8 +192,8 @@ p {
         height: 2.25rem;
     }
 
-    .notif,
-    .question,
+    /* .notif,
+    .question, */
     .menu {
         height: 1.25rem;
     }
