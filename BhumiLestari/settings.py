@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    "cloudinary_storage",
     'django.contrib.staticfiles',
+    "cloudinary",
 
     'apps.chat',
     'apps.checkout',
@@ -96,6 +98,8 @@ WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
+USE_CLOUDINARY = PRODUCTION or os.getenv('USE_CLOUDINARY', 'False').lower() == 'true'
+
 if PRODUCTION:
     DATABASES = {
         'default': {
@@ -177,3 +181,14 @@ MOCK_API_BASE_URL = os.environ.get(
     "MOCK_API_BASE_URL",
     "https://alfarrel-ersya-bhumilestari-mockapi.pws.cs.ui.ac.id",
 )
+
+if USE_CLOUDINARY:
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+    }
+    STORAGES = {
+        "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }

@@ -6,3 +6,5 @@ requests
 urllib3
 python-dotenv
 pillow~=13.0
+cloudinary~=1.46.3
+django-cloudinary-storage~=0.3.0
