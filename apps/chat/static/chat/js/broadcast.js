@@ -59,7 +59,6 @@
     }
 
     /**
-     * DISABLED
      * Memformat angka jumlah pengikut saluran menjadi format ringkas (misal: "1.5k followers").
      * @param {number|string} num - Jumlah total pengikut saluran.
      * @returns {string} String label pengikut yang rapi.

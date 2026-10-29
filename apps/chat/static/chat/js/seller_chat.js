@@ -218,7 +218,6 @@
             }
         }
     }
-    var renderSessionHeader = updateHeaderAndContexts;
 
     /**
      * Mengikat pendengar klik untuk tombol silang (hapus) pada chip produk terkait dari sisi penjual.

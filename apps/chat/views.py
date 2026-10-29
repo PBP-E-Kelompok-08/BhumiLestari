@@ -2,9 +2,8 @@ import json
 import logging
 from datetime import datetime, time
 from django.shortcuts import get_object_or_404, render
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed
+from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt 
 from django.contrib.auth import get_user_model
 from django.db.models import Q, F
 from django.utils import timezone

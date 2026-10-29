@@ -236,7 +236,6 @@
             bindContextTagEvents();
         }
     }
-    var renderSessionHeader = updateHeaderAndContexts;
 
     /**
      * Mengikat pendengar klik pada tombol hapus chip produk terkait (×) di bawah header.
@@ -282,34 +281,6 @@
             });
 
             ChatCore.showToast("Konteks produk " + (productName || productId) + " dihapus.");
-        } catch (err) {
-            ChatCore.showToast("Gagal menghapus konteks: " + err.message);
-        }
-    }
-
-    /**
-     * Menghapus seluruh konteks produk dari sesi percakapan aktif pembeli.
-     */
-    async function clearAllProductContexts() {
-        if (!state.activeSessionId) return;
-        try {
-            var url = "/chat/api/sessions/" + state.activeSessionId + "/products/delete/";
-            await ChatCore.apiFetch(url, {
-                method: "POST",
-                body: { all: true }
-            });
-
-            if (state.activeSessionData) {
-                state.activeSessionData.product_contexts = [];
-                updateHeaderAndContexts(state.activeSessionData);
-            }
-            state.sessions.forEach(function (s) {
-                if (s.id === state.activeSessionId) {
-                    s.product_contexts = [];
-                }
-            });
-
-            ChatCore.showToast("Semua konteks produk berhasil dihapus.");
         } catch (err) {
             ChatCore.showToast("Gagal menghapus konteks: " + err.message);
         }
