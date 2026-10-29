@@ -29,7 +29,7 @@ class User(AbstractUser):
 # Profil tambahan untuk penjual
 class SellerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='seller_profile')
-    store_name = models.CharField(max_length=100)
+    store_name = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -45,6 +45,7 @@ class OTPToken(models.Model):
     otp_code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     is_used = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(default=0)
 
     def is_valid(self):
         now = timezone.now()
@@ -62,7 +63,7 @@ class PaymentMethod(models.Model):
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payment_methods')
     method_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    provider = models.CharField(max_length=100)          # BCA, Mandiri, GoPay, dst.
+    provider = models.CharField(max_length=100)   # BCA, Mandiri, GoPay, dst.
     account_number = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
 

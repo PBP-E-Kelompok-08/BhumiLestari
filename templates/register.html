@@ -32,7 +32,7 @@
 
             <form method="POST" id="registerForm" data-otp-url="{% url 'users:send_otp_api' %}">
                 {% csrf_token %}
-                <input type="hidden" name="role" id="roleInput" value="seller">
+                <input type="hidden" name="role" id="roleInput" value="{{ form_data.role | default:'seller' }}">
 
                 <!-- Toggle Role -->
                 <div class="role-toggle">
@@ -41,19 +41,19 @@
                 </div>
 
                 <div class="field">
-                    <input type="text" name="full_name" class="input" placeholder="Nama" required>
+                    <input type="text" name="full_name" class="input" placeholder="Nama" value="{{form_data.full_name}}" required>
                 </div>
 
                 <!-- Nama Toko (Penjual) / Username (Pembeli) -->
                 <div class="field" id="fieldNamaToko">
-                    <input type="text" name="store_name" id="inputStoreName" class="input" placeholder="Nama Toko" required>
+                    <input type="text" name="store_name" id="inputStoreName" class="input" placeholder="Nama Toko" value="{{form_data.store_name}}" required>
                 </div>
                 <div class="field hidden" id="fieldUsername">
-                    <input type="text" name="username" id="inputUsername" class="input" placeholder="Username">
+                    <input type="text" name="username" id="inputUsername" class="input" placeholder="Username" value="{{form_data.username_input}}" required>
                 </div>
 
                 <div class="field">
-                    <input type="email" name="email" id="emailInput" class="input" placeholder="Email" required>
+                    <input type="email" name="email" id="emailInput" class="input" placeholder="Email" value="{{form_data.email}}" required>
                 </div>
 
                 <!-- OTP + hide/show passrowd + tombol kirim -->
@@ -85,6 +85,5 @@
     </div>
 
     <script src="{% static 'js/register.js' %}"></script>
-    <script src="{% static 'js/auth.js' %}"></script>
 </body>
 </html>
