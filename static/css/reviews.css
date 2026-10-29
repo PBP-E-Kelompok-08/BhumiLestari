@@ -415,6 +415,9 @@
   background: var(--rv-merah) !important;
 }
 .rv-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(32rem, calc(100% - 2rem));
   padding: 1.5rem;
   border: none;

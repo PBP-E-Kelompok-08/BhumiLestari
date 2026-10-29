@@ -21,7 +21,7 @@
 </svg>
 
 <nav class="rv-crumb" aria-label="Navigasi">
-  <a href="{% url 'dashboard:show_dashboard_home' %}">Home</a>
+  <a href="{% url 'dashboard:show_dashboard_home' %}">Beranda</a>
   {% if mode == "toko" %}
     <span aria-hidden="true">›</span> <a href="{% url 'dashboard:show_dashboard_home' %}">Katalog</a>
     <span aria-hidden="true">›</span> <strong>{{ judul }}</strong>

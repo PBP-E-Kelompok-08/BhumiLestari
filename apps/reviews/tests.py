@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.products.models import Product
+from apps.checkout.models import Order, OrderItem
 from apps.users.models import SellerProfile
 
 from . import integrations
@@ -250,6 +251,15 @@ class TambahUlasanUUIDTest(DasarTest):
         super().setUp()
         self.url = reverse("reviews:tambah", args=[self.toko.id])
         self.client.force_login(self.b1)
+        self.order = Order.objects.create(
+            buyer=self.b1, seller=self.toko, store_name=self.toko.store_name,
+            recipient_name="Budi", phone="08123456789", shipping_address="Bandung",
+            status="selesai",
+        )
+        OrderItem.objects.create(
+            order=self.order, product=self.produk, product_name=self.produk.name,
+            price=10000, quantity=1,
+        )
 
     def kirim(self, **data):
         isi = {"rating": "5", "komentar": "Bagus", "produk_id": str(self.produk.pk)}
@@ -263,6 +273,12 @@ class TambahUlasanUUIDTest(DasarTest):
         self.assertEqual(u.produk_id, self.produk.pk)
         self.assertEqual(u.nama_produk, "Sedotan Bambu")
         self.assertEqual(r.json()["ulasan"]["produk"]["id"], str(self.produk.pk))
+
+    def test_tanpa_pembelian_selesai_ditolak(self):
+        self.order.status = "diproses"
+        self.order.save(update_fields=["status"])
+        self.assertEqual(self.kirim().status_code, 403)
+        self.assertFalse(UlasanToko.objects.exists())
 
     def test_produk_id_bukan_uuid(self):
         self.assertEqual(self.kirim(produk_id="12").status_code, 400)
@@ -305,8 +321,20 @@ class IntegrasiTest(DasarTest):
         )
         self.assertIsNone(integrations.ambil_produk(uuid.uuid4()))
 
-    def test_pernah_membeli_masih_stub(self):
-        self.assertTrue(integrations.STUB_PEMBELIAN)
+    def test_hanya_pesanan_selesai_yang_boleh_diulas(self):
+        self.assertFalse(integrations.pernah_membeli(self.b1, self.produk.pk))
+        order = Order.objects.create(
+            buyer=self.b1, seller=self.toko, store_name=self.toko.store_name,
+            recipient_name="Budi", phone="08123456789", shipping_address="Bandung",
+            status="diproses",
+        )
+        OrderItem.objects.create(
+            order=order, product=self.produk, product_name=self.produk.name,
+            price=10000, quantity=1,
+        )
+        self.assertFalse(integrations.pernah_membeli(self.b1, self.produk.pk))
+        order.status = "selesai"
+        order.save(update_fields=["status"])
         self.assertTrue(integrations.pernah_membeli(self.b1, self.produk.pk))
 
 
@@ -323,11 +351,23 @@ class SecurityAndValidationTest(DasarTest):
         cache.clear()
         self.client.force_login(self.b1)
         self.url = reverse("reviews:tambah", args=[self.toko.id])
+        self.order = Order.objects.create(
+            buyer=self.b1, seller=self.toko, store_name=self.toko.store_name,
+            recipient_name="Budi", phone="08123456789", shipping_address="Bandung",
+            status="selesai",
+        )
+
+    def tandai_sudah_dibeli(self, product):
+        OrderItem.objects.create(
+            order=self.order, product=product, product_name=product.name,
+            price=10000, quantity=1,
+        )
 
     def test_rate_limiter_memblokir_spam(self):
         # 10 request diizinkan, request ke-11 diblokir dengan 429
         for i in range(10):
             p = buat_produk(self.toko, f"Produk {i}")
+            self.tandai_sudah_dibeli(p)
             r = self.client.post(self.url, {"rating": "5", "komentar": "Ok", "produk_id": str(p.pk)})
             self.assertEqual(r.status_code, 201)
 
@@ -350,6 +390,7 @@ class SecurityAndValidationTest(DasarTest):
     def test_validasi_foto_asli_diterima(self):
         asli = SimpleUploadedFile("valid.png", self._png_asli(), content_type="image/png")
         p = buat_produk(self.toko, "Produk Foto Asli")
+        self.tandai_sudah_dibeli(p)
         r = self.client.post(
             self.url,
             {"rating": "5", "komentar": "Tes foto asli", "produk_id": str(p.pk), "foto": asli},
