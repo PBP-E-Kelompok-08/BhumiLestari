@@ -25,10 +25,12 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-la3ur3xug26a^4@yn1$!z&4h-2%&1j(wa2y8yn_socc05q=2dk'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-local-marketplace-only' if os.getenv('PRODUCTION', 'False').lower() != 'true' else '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('PRODUCTION', 'False').lower() != 'true'
+if not SECRET_KEY:
+    raise RuntimeError('DJANGO_SECRET_KEY is required in production')
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "sultan-noor-bhumilestari.pws.cs.ui.ac.id"]
 
@@ -218,6 +220,9 @@ MOCK_API_BASE_URL = os.environ.get(
     "MOCK_API_BASE_URL",
     "https://alfarrel-ersya-bhumilestari-mockapi.pws.cs.ui.ac.id",
 )
+MOCK_API_WRITE_TOKEN = os.getenv('MOCK_API_WRITE_TOKEN', '')
+if PRODUCTION and not MOCK_API_WRITE_TOKEN:
+    raise RuntimeError('MOCK_API_WRITE_TOKEN is required in production')
 
 if USE_CLOUDINARY:
     CLOUDINARY_STORAGE = {

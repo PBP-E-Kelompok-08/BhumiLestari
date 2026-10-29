@@ -25,6 +25,7 @@ def kirim_ke_api(product):
                 url,
                 data={"data": json.dumps(data)},
                 files={"verification_document": file},
+                headers={"X-Mock-Api-Key": settings.MOCK_API_WRITE_TOKEN},
                 timeout=15,
             )
         if response.status_code != 201:
