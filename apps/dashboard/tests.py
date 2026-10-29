@@ -5,6 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from apps.products.models import Product
 from apps.users.models import SellerProfile
+from apps.checkout.models import Order, OrderItem
 
 User = get_user_model()
 
@@ -33,6 +34,18 @@ class DashboardTest(TestCase):
 
         self.url_home = reverse("dashboard:show_dashboard_home")
         self.url_api = reverse("dashboard:api_products")
+
+    def buat_pesanan(self, status="selesai", quantity=2):
+        order = Order.objects.create(
+            buyer=self.buyer, seller=self.seller, store_name=self.seller.store_name,
+            recipient_name="Pembeli", phone="08123456789", shipping_address="Bandung",
+            status=status, total_price=100000 * quantity + 7000, shipping_cost=7000,
+        )
+        OrderItem.objects.create(
+            order=order, product=self.produk, product_name=self.produk.name,
+            price=100000, quantity=quantity,
+        )
+        return order
 
     def test_dashboard_guest(self):
         response = self.client.get(self.url_home)
@@ -93,3 +106,27 @@ class DashboardTest(TestCase):
     def test_api_products_guest(self):
         response = self.client.get(self.url_api)
         self.assertIn(response.status_code, [200, 302])
+
+    def test_ringkasan_toko_memakai_data_transaksi_nyata(self):
+        self.buat_pesanan("selesai", 2)
+        self.buat_pesanan("diproses", 1)
+        self.client.login(email="seller@gmail.com", password="pass")
+        response = self.client.get(reverse("dashboard:seller_summary"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["jumlah_produk"], 1)
+        self.assertEqual(response.context["jumlah_pesanan"], 2)
+        self.assertEqual(response.context["pendapatan_bulan"], 200000)
+        self.assertEqual(response.context["produk_terlaris"][0]["terjual"], 2)
+        self.assertContains(response, "Rp. 200.000")
+
+    def test_laporan_mingguan_mengabaikan_pesanan_belum_selesai(self):
+        self.buat_pesanan("selesai", 3)
+        self.buat_pesanan("dikirim", 5)
+        self.client.login(email="seller@gmail.com", password="pass")
+        response = self.client.get(reverse("dashboard:sales_report"), {"periode": "mingguan"})
+        self.assertEqual(response.status_code, 200)
+        penjualan = response.context["penjualan"]
+        self.assertEqual(penjualan["periode"], "mingguan")
+        self.assertEqual(penjualan["pendapatan"], 300000)
+        self.assertEqual(penjualan["rata_pesanan"], 300000)
+        self.assertEqual(penjualan["produk_terlaris"][0]["terjual"], 3)
