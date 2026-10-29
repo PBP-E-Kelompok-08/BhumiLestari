@@ -3,13 +3,21 @@
 
 {% block title %}Saluran Broadcast - BhumiLestari{% endblock title %}
 
+{% block brand_header_action %}
+<button type="button"
+        id="openAddChannelBtn"
+        class="chat-new-session-btn"
+        title="Tambah Saluran Toko"
+        aria-label="Tambah Saluran Toko">+</button>
+{% endblock brand_header_action %}
+
 {% block left_panel_content %}
 <form id="broadcastSearchForm" class="chat-search-row" role="search">
     <input type="search"
            id="broadcastSearchInput"
            class="chat-search-input"
-           placeholder="Cari pesan Anda di sini"
-           aria-label="Cari saluran siaran di sini">
+           placeholder="Cari nama channel di sini"
+           aria-label="Cari nama channel di sini">
     <button type="submit" class="chat-search-btn">Search</button>
 </form>
 
@@ -41,7 +49,15 @@
         </div>
         <div class="chat-header-info">
             <h1 id="activeChannelTitle" class="chat-header-title">Pilih Saluran Broadcast</h1>
-            <p id="activeChannelFollowers" class="chat-header-subtitle">0 followers</p>
+            <div id="activeChannelFollowWrap" class="chat-broadcast-header-sub" style="display: none;">
+                <button type="button"
+                        id="broadcastFollowBtn"
+                        class="chat-broadcast-follow-btn"
+                        aria-label="Follow atau Unfollow Saluran">
+                    Follow
+                </button>
+                <span id="activeChannelFollowers" class="chat-broadcast-followers-count"></span>
+            </div>
         </div>
     </div>
 
@@ -81,7 +97,27 @@
 <footer id="broadcastReadonlyFooter" class="chat-bottom-bar chat-bottom-readonly">
     Anda tidak punya akses untuk mengirim pesan pada channel ini
 </footer>
+
+<footer id="broadcastComposerFooter" class="chat-bottom-bar" style="display: none;" hidden>
+    <form id="broadcastComposerForm" class="chat-composer-form">
+        <input type="text"
+               id="broadcastMessageInput"
+               class="chat-composer-input"
+               placeholder="Ketik pesan siaran untuk pengikut tokomu..."
+               aria-label="Ketik pesan siaran"
+               autocomplete="off">
+        <button type="submit" id="broadcastSendBtn" class="chat-send-btn" aria-label="Kirim pesan siaran">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+        </button>
+    </form>
+</footer>
 {% endblock main_area_content %}
+
+{% block modals %}
+    {% include "chat/components/add_channel_modal.html" %}
+{% endblock modals %}
 
 {% block scripts %}
 <script>

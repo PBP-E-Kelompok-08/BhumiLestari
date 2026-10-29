@@ -1,0 +1,23 @@
+<!-- Modal Tambah Saluran Siaran Toko -->
+<div id="addChannelModalBackdrop" class="chat-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addChannelModalTitle" hidden>
+    <div class="chat-modal-dialog">
+        <button type="button" class="chat-modal-close" id="closeAddChannelModalBtn" aria-label="Tutup dialog tambah saluran">&times;</button>
+        <h2 id="addChannelModalTitle" class="chat-modal-title">Tambah Saluran Toko</h2>
+
+        <div class="chat-search-wrap" style="margin-top: 10px;">
+            <label for="channelExploreSearchInput" class="chat-modal-label" style="font-size: 18px;">Cari Saluran Toko:</label>
+            <div class="chat-search-input-box">
+                <input type="text"
+                       id="channelExploreSearchInput"
+                       class="chat-modal-select chat-searchable-input"
+                       placeholder="Ketik nama toko atau saluran siaran..."
+                       autocomplete="off">
+                <button type="button" id="clearChannelExploreBtn" class="chat-search-clear-btn" title="Hapus pencarian saluran" hidden>&times;</button>
+            </div>
+
+            <div id="addChannelDropdownLoading" class="chat-search-dropdown-loading" hidden style="margin-top: 12px;">Memuat saluran toko...</div>
+            <ul id="addChannelDropdownItems" class="chat-channel-explore-list" role="listbox" aria-label="Daftar Saluran Tersedia"></ul>
+        </div>
+    </div>
+</div>
+

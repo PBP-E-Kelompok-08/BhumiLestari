@@ -641,22 +641,36 @@ class ChatAPITest(TestCase):
         self.assertEqual(UserReport.objects.get(id=report_id).reason, "Pembeli menggunakan kata-kata kasar.")
 
     def test_broadcast_channel_apis(self):
-        # 1. Create channel
-        channel = BroadcastChannel.objects.create(
-            seller=self.seller,
-            name="Channel Toko Eucalyptus",
-            description="Informasi promo dan tips hidup ramah lingkungan",
-            followers_count=150,
-        )
+        # 1. Channel auto-created by signal for seller
+        channel = self.seller.broadcast_channel
+        channel.name = "Channel Toko Eucalyptus"
+        channel.description = "Informasi promo dan tips hidup ramah lingkungan"
+        channel.followers_count = 150
+        channel.save()
 
-        # 2. List channels
+        # 2. List channels (Buyer vs Seller)
         self.client.login(username="buyer@test.com", password="password123")
         list_url = reverse("chat:list_broadcast_channels")
+        resp_list_empty = self.client.get(list_url)
+        self.assertEqual(resp_list_empty.status_code, 200)
+        self.assertEqual(resp_list_empty.json()["total"], 0)
+
+        # Buyer follows channel -> now appears in list
+        channel.followers.add(self.buyer)
         resp_list = self.client.get(list_url)
         self.assertEqual(resp_list.status_code, 200)
         self.assertEqual(resp_list.json()["total"], 1)
+        self.assertFalse(resp_list.json()["channels"][0]["is_owner"])
+
+        self.client.login(username="seller@test.com", password="password123")
+        resp_list_seller = self.client.get(list_url)
+        self.assertEqual(resp_list_seller.status_code, 200)
+        self.assertTrue(resp_list_seller.json()["channels"][0]["is_owner"])
+        self.assertIsNotNone(resp_list_seller.json()["my_channel"])
+        self.assertEqual(resp_list_seller.json()["my_channel"]["id"], channel.id)
 
         # 3. Buyer cannot post to broadcast
+        self.client.login(username="buyer@test.com", password="password123")
         send_url = reverse("chat:send_broadcast_message", args=[channel.id])
         resp_forbidden = self.client.post(send_url, data=json.dumps({"content": "Promo palsu"}), content_type="application/json")
         self.assertEqual(resp_forbidden.status_code, 403)
@@ -716,14 +730,26 @@ class ChatAPITest(TestCase):
         resp_broadcast = self.client.get(reverse("chat:broadcast"))
         self.assertEqual(resp_broadcast.status_code, 200)
         self.assertContains(resp_broadcast, "Anda tidak punya akses untuk mengirim pesan pada channel ini")
+        self.assertContains(resp_broadcast, "broadcastComposerFooter")
         self.assertTrue(BroadcastChannel.objects.filter(seller=self.seller).exists())
 
-    def test_broadcast_channel_archive_and_tabs(self):
-        channel = BroadcastChannel.objects.create(
-            seller=self.seller,
-            name="Channel Toko Lestari",
-            followers_count=100,
+    def test_all_sellers_automatically_have_broadcast_channel(self):
+        new_seller = User.objects.create_user(
+            username="seller.baru@bhumilestari.com",
+            email="seller.baru@bhumilestari.com",
+            password="password123",
+            role="seller",
+            full_name="Toko Organik Sejahtera"
         )
+        self.assertTrue(BroadcastChannel.objects.filter(seller=new_seller).exists())
+        self.assertEqual(new_seller.broadcast_channel.name, "Toko Organik Sejahtera")
+
+    def test_broadcast_channel_archive_and_tabs(self):
+        channel = self.seller.broadcast_channel
+        channel.name = "Channel Toko Lestari"
+        channel.followers_count = 100
+        channel.save()
+        channel.followers.add(self.buyer)
 
         self.client.login(username="buyer@test.com", password="password123")
         archive_url = reverse("chat:toggle_archive_broadcast_channel", args=[channel.id])
@@ -752,6 +778,150 @@ class ChatAPITest(TestCase):
 
         resp_semua_after = self.client.get(f"{list_url}?tab=semua")
         self.assertEqual(len(resp_semua_after.json()["channels"]), 1)
+
+    def test_follow_and_unfollow_broadcast_channel_api(self):
+        """
+        Menguji alur ikuti (follow) dan berhenti ikuti (unfollow) saluran siaran:
+        1. Validasi proteksi HTTP Method (hanya POST yang diizinkan, GET -> 405).
+        2. Validasi pencegahan follow diri sendiri (pemilik/seller tidak bisa follow -> 400).
+        3. Pembeli melakukan follow: status 200, is_following=True, followers_count bertambah.
+        4. Verifikasi status is_following pada get_broadcast_messages dan list_broadcast_channels.
+        5. Pembeli melakukan unfollow: status 200, is_following=False, followers_count berkurang.
+        """
+        channel = self.seller.broadcast_channel
+        channel.name = "Saluran Toko Hijau"
+        channel.followers_count = 0
+        channel.save()
+        follow_url = reverse("chat:toggle_follow_broadcast_channel", args=[channel.id])
+        messages_url = reverse("chat:get_broadcast_messages", args=[channel.id])
+        list_url = reverse("chat:list_broadcast_channels")
+
+        # 1. GET request ditolak dengan 405 Method Not Allowed
+        self.client.login(username="buyer@test.com", password="password123")
+        resp_get = self.client.get(follow_url)
+        self.assertEqual(resp_get.status_code, 405)
+
+        # 2. Seller mencoba follow channel miliknya sendiri -> 400 Bad Request
+        self.client.login(username="seller@test.com", password="password123")
+        resp_owner = self.client.post(follow_url)
+        self.assertEqual(resp_owner.status_code, 400)
+        self.assertIn("tidak dapat mengikuti channel Anda sendiri", resp_owner.json().get("message", ""))
+
+        # 3. Buyer melakukan follow pertama kali
+        self.client.login(username="buyer@test.com", password="password123")
+        resp_follow = self.client.post(follow_url)
+        self.assertEqual(resp_follow.status_code, 200)
+        follow_data = resp_follow.json()
+        self.assertEqual(follow_data["status"], "success")
+        self.assertTrue(follow_data["is_following"])
+        self.assertEqual(follow_data["followers_count"], 1)
+
+        # Verifikasi langsung pada database
+        channel.refresh_from_db()
+        self.assertEqual(channel.followers_count, 1)
+        self.assertTrue(channel.followers.filter(id=self.buyer.id).exists())
+
+        # 4. Verifikasi endpoint messages dan list channels merefleksikan is_following = True
+        resp_msgs = self.client.get(messages_url)
+        self.assertEqual(resp_msgs.status_code, 200)
+        self.assertTrue(resp_msgs.json()["channel"]["is_following"])
+        self.assertEqual(resp_msgs.json()["channel"]["followers_count"], 1)
+
+        resp_list = self.client.get(list_url)
+        self.assertEqual(resp_list.status_code, 200)
+        matched = next((c for c in resp_list.json()["channels"] if c["id"] == channel.id), None)
+        self.assertIsNotNone(matched)
+        self.assertTrue(matched["is_following"])
+
+        # 5. Buyer melakukan follow kedua kali (Unfollow)
+        resp_unfollow = self.client.post(follow_url)
+        self.assertEqual(resp_unfollow.status_code, 200)
+        unfollow_data = resp_unfollow.json()
+        self.assertEqual(unfollow_data["status"], "success")
+        self.assertFalse(unfollow_data["is_following"])
+        self.assertEqual(unfollow_data["followers_count"], 0)
+
+        # Verifikasi langsung pada database
+        channel.refresh_from_db()
+        self.assertEqual(channel.followers_count, 0)
+        self.assertFalse(channel.followers.filter(id=self.buyer.id).exists())
+
+        # Verifikasi get_broadcast_messages merefleksikan is_following = False
+        resp_msgs_after = self.client.get(messages_url)
+        self.assertEqual(resp_msgs_after.status_code, 200)
+        self.assertFalse(resp_msgs_after.json()["channel"]["is_following"])
+        self.assertEqual(resp_msgs_after.json()["channel"]["followers_count"], 0)
+
+    def test_add_channel_to_list_and_explore_api(self):
+        """
+        Menguji fitur Tambah Saluran ke Channel List dan Jelajahi Saluran (Explore):
+        1. Buyer membuka channel list: awalnya 0 saluran (karena belum follow dan belum add).
+        2. Endpoint explore_broadcast_channels mengembalikan saluran yang tersedia (bukan milik sendiri).
+        3. Buyer menambahkan channel ke list via add_broadcast_channel_to_list_api (POST).
+           - Channel sukses masuk ke relasi added_by.
+           - Channel TIDAK otomatis terfollow (is_following=False, followers_count=0).
+        4. Channel sekarang muncul di list_broadcast_channels_api pembeli dengan is_following=False.
+        5. Pemilik channel tidak dapat menambahkan channelnya sendiri (status 400).
+        6. Request GET ke endpoint add ditolak dengan status 405.
+        """
+        channel = self.seller.broadcast_channel
+        channel.name = "Saluran Toko Herbal Lestari"
+        channel.followers_count = 0
+        channel.save()
+
+        self.client.login(username="buyer@test.com", password="password123")
+        list_url = reverse("chat:list_broadcast_channels")
+        explore_url = reverse("chat:explore_broadcast_channels")
+        add_url = reverse("chat:add_broadcast_channel_to_list", args=[channel.id])
+
+        # 1. Buyer channel list kosong awalnya
+        resp_list_initial = self.client.get(list_url)
+        self.assertEqual(resp_list_initial.status_code, 200)
+        self.assertEqual(resp_list_initial.json()["total"], 0)
+
+        # 2. Explore channels
+        resp_explore = self.client.get(explore_url)
+        self.assertEqual(resp_explore.status_code, 200)
+        explore_data = resp_explore.json()
+        self.assertEqual(explore_data["status"], "success")
+        self.assertTrue(any(c["id"] == channel.id for c in explore_data["channels"]))
+
+        # Explore dengan query pencarian cocok
+        resp_search = self.client.get(f"{explore_url}?q=Herbal")
+        self.assertEqual(resp_search.status_code, 200)
+        self.assertEqual(len(resp_search.json()["channels"]), 1)
+        self.assertEqual(resp_search.json()["channels"][0]["id"], channel.id)
+
+        # 3. GET request ke add ditolak (405)
+        resp_get_add = self.client.get(add_url)
+        self.assertEqual(resp_get_add.status_code, 405)
+
+        # 4. Tambahkan channel ke list via POST
+        resp_add = self.client.post(add_url)
+        self.assertEqual(resp_add.status_code, 200)
+        add_data = resp_add.json()
+        self.assertEqual(add_data["status"], "success")
+        self.assertFalse(add_data["channel"]["is_following"]) # Tidak otomatis terfollow
+
+        # Verifikasi di database: ada di added_by, TIDAK ada di followers
+        channel.refresh_from_db()
+        self.assertTrue(channel.added_by.filter(id=self.buyer.id).exists())
+        self.assertFalse(channel.followers.filter(id=self.buyer.id).exists())
+        self.assertEqual(channel.followers_count, 0)
+
+        # 5. Channel sekarang muncul di channel list pembeli
+        resp_list_after = self.client.get(list_url)
+        self.assertEqual(resp_list_after.status_code, 200)
+        self.assertEqual(resp_list_after.json()["total"], 1)
+        item = resp_list_after.json()["channels"][0]
+        self.assertEqual(item["id"], channel.id)
+        self.assertFalse(item["is_following"])
+
+        # 6. Pemilik (seller) tidak dapat menambahkan salurannya sendiri
+        self.client.login(username="seller@test.com", password="password123")
+        resp_seller_add = self.client.post(add_url)
+        self.assertEqual(resp_seller_add.status_code, 400)
+        self.assertIn("saluran toko Anda sendiri", resp_seller_add.json().get("message", ""))
 
     def test_search_sellers_api_debounce_and_random(self):
         self.client.login(username="buyer@test.com", password="password123")

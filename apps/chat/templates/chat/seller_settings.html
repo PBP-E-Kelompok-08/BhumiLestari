@@ -3,6 +3,8 @@
 
 {% block title %}Pengaturan Sambutan - Manajemen Chat Penjual{% endblock title %}
 
+{% block extra_shell_class %}chat-settings-shell{% endblock extra_shell_class %}
+
 {% block left_panel_content %}
 <nav class="chat-subnav-list" aria-label="Sub-menu Manajemen Chat Penjual">
     <a href="{% url 'chat:seller_settings' %}" class="chat-subnav-item active">Pengaturan Sambutan</a>
@@ -19,9 +21,18 @@
                 <polyline points="15 10 7 18 15 26"/>
             </svg>
         </a>
-        <h1 class="chat-header-title" style="font-size: 27px;">Pengaturan Sambutan</h1>
+        <h1 class="chat-header-title">Pengaturan Sambutan</h1>
     </div>
 </header>
+
+<div class="chat-mobile-subnav" role="tablist" aria-label="Sub-navigasi Pengaturan Toko">
+    <a href="{% url 'chat:seller_settings' %}" class="chat-mobile-subnav-pill active" role="tab" aria-selected="true">
+        Pengaturan Sambutan
+    </a>
+    <a href="{% url 'chat:seller_keywords' %}" class="chat-mobile-subnav-pill" role="tab" aria-selected="false">
+        Balasan Kata Kunci
+    </a>
+</div>
 
 <section class="chat-settings-scroll">
     <form id="sellerWelcomeSettingsForm" class="chat-settings-wrap">

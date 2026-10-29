@@ -1,6 +1,13 @@
 (function () {
     "use strict";
 
+    /**
+     * Menormalisasi format input waktu menjadi "HH:MM" 24-jam.
+     * Mengganti tanda titik menjadi titik dua dan membatasi rentang jam (00-23) dan menit (00-59).
+     * 
+     * @param {string} val - Nilai input string dari pengguna (misal "8.30" atau "08:00").
+     * @returns {string} String waktu tervalidasi format "HH:MM".
+     */
     function normalizeTimeInput(val) {
         var cleaned = String(val || "08:00").trim().replace(".", ":");
         var parts = cleaned.split(":");
@@ -10,6 +17,11 @@
         return hh + ":" + mm;
     }
 
+    /**
+     * Menginisialisasi form pengaturan pesan sambutan bot penjual (Screen 3).
+     * Menangani pengiriman formulir via AJAX POST ke `/chat/api/seller/settings/`
+     * untuk menyimpan nama bot, pesan sambutan, jam operasional toko, dan pesan toko tutup.
+     */
     function initWelcomeSettingsForm() {
         var form = document.getElementById("sellerWelcomeSettingsForm");
         if (!form) return;
@@ -44,6 +56,11 @@
         });
     }
 
+    /**
+     * Menginisialisasi manajemen daftar kata kunci dan balasan otomatis penjual (Screen 4).
+     * Mencakup penambahan kata kunci baru, pengubahan (edit), penghapusan,
+     * serta sakelar aktif/nonaktif (toggle is_active).
+     */
     function initKeywordsManagement() {
         var kwForm = document.getElementById("keywordCreateEditForm");
         var kwList = document.getElementById("keywordListContainer");
@@ -75,6 +92,9 @@
         var submitBtn = document.getElementById("submitKeywordBtn");
         var cancelEditBtn = document.getElementById("cancelEditKeywordBtn");
 
+        /**
+         * Mengembalikan formulir penambahan/pengubahan kata kunci ke kondisi awal (tambah baru).
+         */
         function resetKeywordForm() {
             editingIdInput.value = "";
             questionInput.value = "";
@@ -87,6 +107,10 @@
             cancelEditBtn.addEventListener("click", resetKeywordForm);
         }
 
+        /**
+         * Memuat ulang daftar kata kunci dari server via GET `/chat/api/seller/knowledge/`
+         * dan memperbarui tampilan daftar item secara reaktif.
+         */
         async function refreshKeywordsList() {
             try {
                 var data = await ChatCore.apiFetch("/chat/api/seller/knowledge/");
@@ -142,6 +166,10 @@
             }
         }
 
+        /**
+         * Mengikat event listener untuk tombol edit, tombol hapus, dan sakelar status
+         * pada setiap item kata kunci yang ada di DOM.
+         */
         function bindKeywordItemActions() {
             kwList.querySelectorAll(".js-edit-kw").forEach(function (btn) {
                 btn.addEventListener("click", function () {
