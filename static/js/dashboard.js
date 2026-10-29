@@ -43,11 +43,11 @@ function renderActions(product, role, loginUrl) {
             class="dash-btn dash-btn-delete"
             data-delete-url="${escapeHtml(product.delete_url)}"
             data-name="${escapeHtml(product.name)}">
-      Hapus Item
+      Hapus Produk
     </button>`;
 
   const editLink = `
-    <a href="${escapeHtml(product.edit_url)}" class="dash-btn dash-btn-edit">Edit Item</a>`;
+    <a href="${escapeHtml(product.edit_url)}" class="dash-btn dash-btn-edit">Edit Produk</a>`;
 
   const cartButton = `
     <button type="button" class="dash-btn dash-btn-cart"
@@ -109,7 +109,7 @@ function renderCard(product, role, loginUrl) {
       ${renderRating(product)}
       ${renderStatus(product, role)}
       <div class="dash-card-actions">
-        <a href="${escapeHtml(product.review_url)}" class="dash-btn dash-btn-review">Lihat Review</a>
+        <a href="${escapeHtml(product.review_url)}" class="dash-btn dash-btn-review">Lihat Ulasan</a>
         ${renderActions(product, role, loginUrl)}
       </div>
     </article>`;
