@@ -229,6 +229,7 @@
                     e.preventDefault();
                     var cid = parseInt(item.getAttribute("data-channel-id"), 10);
                     selectChannel(cid);
+                    if (els.shell) els.shell.classList.add("mobile-thread-active");
                 }
             });
         });

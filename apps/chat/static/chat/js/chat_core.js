@@ -236,6 +236,13 @@ window.ChatCore = (function () {
                 shell.classList.remove("mobile-thread-active");
             });
         }
+
+        // Reset state mobile saat ukuran layar diperbesar ke desktop (> 768px)
+        window.addEventListener("resize", function () {
+            if (window.innerWidth > 768 && shell) {
+                shell.classList.remove("mobile-thread-active");
+            }
+        });
     }
 
     document.addEventListener("DOMContentLoaded", initCommonModals);

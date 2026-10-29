@@ -136,6 +136,7 @@
                     e.preventDefault();
                     var sid = item.getAttribute("data-session-id");
                     selectSession(sid);
+                    if (els.shell) els.shell.classList.add("mobile-thread-active");
                 }
             });
         });

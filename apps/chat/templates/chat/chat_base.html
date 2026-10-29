@@ -13,7 +13,7 @@
     {% block extra_head %}{% endblock extra_head %}
 </head>
 <body class="chat-page-body">
-    <div id="chatShell" class="chat-shell">
+    <div id="chatShell" class="chat-shell {% block extra_shell_class %}{% endblock extra_shell_class %}">
         {% include "chat/components/icon_rail.html" %}
 
         <aside class="chat-left-panel" aria-label="Daftar Percakapan dan Menu">
