@@ -12,13 +12,15 @@ from .models import OTPToken, SellerProfile, PaymentMethod
 from .forms import LogoForm, PaymentForm, PROVIDERS
 from django.utils import timezone
 from datetime import timedelta
-import logging
 from django.db import transaction, IntegrityError
 from django.core.validators import EmailValidator
-import secrets
 from django.db.models import F
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
+from django.core.cache import cache
+import logging
+import secrets
+import hashlib
 import json
 
 from .models import OTPToken, SellerProfile
@@ -31,6 +33,9 @@ email_validator = EmailValidator()
 
 MAX_PAYMENT_METHODS = 5
 MAX_OTP_ATTEMPTS = 5
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW_SECOND = 15 * 60
+LOGIN_LOCKOUT_SECOND = 5 * 60
 
 # API AJAX untuk kirim OTP
 @require_POST
@@ -81,6 +86,11 @@ def send_otp_api(request):
         if token:
             token.delete()
         return JsonResponse({'success': False, 'message': 'Gagal mengirim OTP, coba lagi.'}, status=500)
+
+def _login_key(request, email):
+    ip = request.META.get('REMOTE_ADDR', '')
+    raw = f'{ip}:{email.lower()}'
+    return 'login_fail:' + hashlib.sha256(raw.encode()).hexdigest()
 
 # view Pendaftaran (SignUp)
 def register_view(request):
@@ -204,27 +214,36 @@ def login_view(request):
     if request.method == 'POST':
         email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
+
+        login_url = reverse('users:login')
+        login_url = reverse('users:login')
+        if next_url:
+            login_url += '?' + urlencode({'next' : next_url})
+
+        key = _login_key(request, email)
+
+        if cache.get(key, 0) >= MAX_LOGIN_ATTEMPTS:
+            messages.error(request, f'Terlalu banyak percobaan login. Coba lagi dalam {LOGIN_LOCKOUT_SECOND // 60} menit')
+            return redirect(login_url)
+
         user_obj = User.objects.filter(email__iexact=email).first()
         user = authenticate(request, username=user_obj.email, password=password) if user_obj else None
-
         if user is None:
+            cache.add(key, 0, LOGIN_WINDOW_SECOND)
+            attempts = cache.incr(key)
+            if attempts >= MAX_LOGIN_ATTEMPTS:
+                cache.set(key, attempts, LOGIN_LOCKOUT_SECOND)
             messages.error(request, "Email atau password salah!")
-            login_url = reverse('users:login')
-            if next_url:
-                login_url += '?' + urlencode({'next' : next_url})
-            return redirect('users:login')
+            return redirect(login_url)
 
-        # if user.role == 'seller':
-        #     messages.warning(request, 'Maaf, halaman penjual sedang dalam maintenance.')
-        #     return redirect('users:login')
-
+        cache.delete(key)
         login(request, user)
 
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
             return redirect(next_url)
         return redirect('dashboard:show_dashboard_home')
     
-    return render(request, 'login.html')
+    return render(request, 'login.html', {'next' : next_url})
 
 @require_POST
 def logout_view(request):
@@ -329,7 +348,7 @@ def account_settings(request):
         return redirect('users:account_settings') 
 
     current_name = (
-        getattr(getattr(user, 'seller_profile', None), 'store_name', '')
+        (getattr(getattr(user, 'seller_profile', None), 'store_name', '') or user.username)
         if is_seller else user.full_name
     )
     return render(request, 'account_settings.html', {
