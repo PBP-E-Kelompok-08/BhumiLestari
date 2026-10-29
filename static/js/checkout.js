@@ -54,7 +54,8 @@
     // perubahan ongkir dan total saat opsi pengiriman diganti
     function recalc() {
         var picked = form.querySelector('input[name=shipping_method]:checked');
-        var cost = picked ? parseInt(picked.dataset.cost, 10) || 0 : 0;
+        var perStore = picked ? parseInt(picked.dataset.cost, 10) || 0 : 0;
+        var cost = perStore * (parseInt(document.getElementById('co-summary').dataset.storeCount, 10) || 1);
         var items = parseInt(summary.dataset.itemsTotal, 10) || 0;
         document.getElementById('co-shipping').textContent = rupiah(cost);
         document.getElementById('co-grand').textContent = rupiah(items + cost);

@@ -11,6 +11,7 @@
 <div class="order-page">
   <a href="{% url 'checkout:order_list' %}" class="back-link">← Kembali ke Tabel</a>
   <h1 class="page-title">Pesanan #{{ order.pk }}</h1>
+  {% for message in messages %}<p role="alert" class="order-message">{{ message }}</p>{% endfor %}
 
   <div class="order-grid">
 

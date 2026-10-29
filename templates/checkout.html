@@ -57,13 +57,13 @@
             </div>
         </section>
 
-        <section class="cc-card" id="co-summary" data-items-total="{{ items_total }}">
+        <section class="cc-card" id="co-summary" data-items-total="{{ items_total }}" data-store-count="{{ store_count }}">
             <div class="summary-line">
                 <span>Total harga [{{ item_count }} Barang]:</span>
                 <span>Rp. {{ items_total|rupiah }}</span>
             </div>
             <div class="summary-line">
-                <span>Total Ongkir</span>
+                <span>Total Ongkir ({{ store_count }} toko)</span>
                 <span id="co-shipping">Rp. {{ shipping_cost|rupiah }}</span>
             </div>
             <div class="summary-row summary-total">
