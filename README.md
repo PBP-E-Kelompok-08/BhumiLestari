@@ -49,6 +49,7 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 | --- | --- | --- |
 | 1. | Mock API data hasil uji produk eco-friendly tiap company partner| <a href="https://drive.google.com/drive/u/1/folders/1sHDq1ZUiYRcyWkg-OhxK9_KpdaMj3ptn"> Google Drive </a>
 | 2. | Open Router API untuk chatbot| <a href="https://openrouter.ai/"> OpenRouter </a>|
+| 3. | Cloudinary| <a href="https://cloudinary.com/"> Cloudinary </a>|
 
 ## AI Disclosure
 ### Alfarrel Ersya Balawa
