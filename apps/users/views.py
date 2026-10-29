@@ -9,6 +9,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import OTPToken, SellerProfile, PaymentMethod
+from .forms import LogoForm
 import json
 
 from .models import OTPToken, SellerProfile
@@ -21,7 +22,7 @@ User = get_user_model()
 def send_otp_api(request):
     try:
         data = json.loads(request.body)
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
 
         if not email:
             return JsonResponse({'success': False, 'message': 'Email wajib diisi!'}, status=400)
@@ -41,7 +42,7 @@ def send_otp_api(request):
         )
         return JsonResponse({'success': True, 'message': 'Kode OTP telah dikirim ke email kamu.'})
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+        return JsonResponse({'success': False, 'message': 'Gagal mengirim OTP, coba lagi.'}, status=500)
 
 # view Pendaftaran (SignUp)
 def register_view(request):
@@ -59,6 +60,13 @@ def register_view(request):
             messages.error(request, 'Konfirmasi password tidak cocok!')
             return render(request, 'register.html')
 
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            for m in e.messages:
+                messages.error(request, m)
+            return render(request, 'register.html')
+
         otp_obj = OTPToken.objects.filter(email=email, otp_code=otp_code).last()
         if not otp_obj or not otp_obj.is_valid():
             messages.error(request, 'Kode OTP salah atau sudah kadaluarsa')
@@ -68,6 +76,10 @@ def register_view(request):
             username = email.split('@')[0] + '_seller'
         else:
             username = username_input or email.split('@')[0]
+
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "Username telah digunakan, coba yang lain.")
+            return render(request, 'register.html')
 
         # Buat User baru
         try:
@@ -91,17 +103,18 @@ def register_view(request):
             login(request, user)
             messages.success(request, 'Pendaftaran berhasil! Selamat datang di BhumiLestari.')
             return redirect('dashboard:show_dashboard_home')
-        except Exception as e:
-            messages.error(request, f'Terjadi kesalahan: {str(e)}')
+        except Exception:
+            messages.error(request, 'Terjadi kesalahan saat mendaftar, coba lagi.')
 
     return render(request, 'register.html')
 
 # View Login
 def login_view(request):
     if request.method == 'POST':
-        email = request.POST.get('email')
+        email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
-        user = authenticate(request, username=email, password=password)
+        user_obj = User.objects.filter(email__iexact=email).first()
+        user = authenticate(request, username=user_obj.email, password=password) if user_obj else None
 
         if user is None:
             messages.error(request, "Email atau password salah!")
@@ -134,6 +147,12 @@ def account_settings(request):
         action = request.POST.get('action')
 
         if action == 'profile':
+            logo_form = LogoForm(request.POST, request.FILES)
+            if not logo_form.is_valid():
+                for error in logo_form.errors['logo']:
+                    messages.error(request, error)
+                return redirect('users:account_settings')
+            
             name = request.POST.get('name', '').strip()
             if is_seller:
                 profile, _ = SellerProfile.objects.get_or_create(
@@ -146,8 +165,12 @@ def account_settings(request):
                 user.full_name = name
             user.phone = request.POST.get('phone', '').strip()
             user.address = request.POST.get('address', '').strip()
-            if request.FILES.get('logo'):
-                user.logo = request.FILES['logo']
+
+            new_logo = logo_form.cleaned_data['logo']
+            if new_logo:
+                if user.logo:
+                    user.logo.delete(save=False)
+                user.logo = new_logo
             user.save()
             messages.success(request, 'Perubahan berhasil disimpan.')
 
@@ -175,7 +198,7 @@ def account_settings(request):
             method_type = request.POST.get('method_type')
             provider = request.POST.get('provider', '').strip()
             number = request.POST.get('account_number', '').strip()
-            if method_type in dict(PaymentMethod.TYPE_CHOICES) and provider and number:
+            if method_type in dict(PaymentMethod.TYPE_CHOICES) and provider and number.isdigit():
                 PaymentMethod.objects.create(
                     user=user, method_type=method_type,
                     provider=provider, account_number=number

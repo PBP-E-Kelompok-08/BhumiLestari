@@ -1,4 +1,4 @@
-import random
+import secrets
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
@@ -52,7 +52,7 @@ class OTPToken(models.Model):
 
     @staticmethod
     def generate_otp():
-        return str(random.randint(100000, 999999))
+        return str(secrets.randbelow(900000) + 100000)
 
 class PaymentMethod(models.Model):
     TYPE_CHOICES = [

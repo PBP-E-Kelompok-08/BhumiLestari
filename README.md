@@ -49,3 +49,22 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 | --- | --- | --- |
 | 1. | Mock API data hasil uji produk eco-friendly tiap company partner| <a href="https://drive.google.com/drive/u/1/folders/1sHDq1ZUiYRcyWkg-OhxK9_KpdaMj3ptn"> Google Drive </a>
 | 2. | Open Router API untuk chatbot| <a href="https://openrouter.ai/"> OpenRouter </a>|
+| 3. | Cloudinary| <a href="https://cloudinary.com/"> Cloudinary </a>|
+
+## AI Disclosure
+### Alfarrel Ersya Balawa
+
+### Athifah Mufidah
+
+### Nurfadhil Kurniawan
+
+### Regina Gunadi
+<div align = “justify>
+AI yang digunakan adalah Claude (free plan) dan AI Overview di Google. Tujuan penggunaannya adalah untuk mempersingkat waktu pembuatan template HTML dan CSS, membantu menjelaskan beberapa hal yang saya tidak pahami dan bingung, serta sebagai teman debugging dan diskusi penerapan best practices. Selain itu, saya juga gunakan untuk membantu memahami kodingan teman yang ditambahkan di beberapa files bagian saya. Strategi prompt yang digunakan adalah berusaha menjelaskan kondisi yang terjadi, lalu ide saya untuk menyelesaikannya dan meminta verifikasi apakah keputusan tersebut sesuai. Untuk beberapa kasus, saya tidak mendapat ide sehingga saya bertanya langsung dan selalu berusaha untuk meminta untuk dijelaskan. Saat mendapat jawaban dari AI, saya membaca dan melakukan filtering per bagian sebelum diimplementasikan ke dalam kode. 
+Berikut adalah beberapa link chatnya: 
+- https://claude.ai/share/df222b12-1a39-4bf3-848c-a909ff8204ee
+- https://claude.ai/share/568656c7-a1ce-4928-850f-ed3ee4997029
+- https://claude.ai/share/2c2f96fe-01d3-4a0b-977c-eff8a25a73fb
+</div>
+
+### Sultan Noor Dafiq
