@@ -1,0 +1,126 @@
+:root {
+    --cc-bg: #f1ead3;
+    --cc-card: #fcf7e8;
+    --cc-dark: #3b2417;
+    --cc-btn: #4b6a5f;
+    --cc-pill: #e8ecf8;
+}
+
+.cc-page {
+    background: var(--cc-bg);
+    min-height: 70vh;
+    padding: 32px 64px 64px;
+    font-family: "Prompt", sans-serif;
+}
+
+.cc-title { font-size: 2.2rem; font-weight: 800; margin: 0 0 24px; }
+.cc-card { background: var(--cc-card); padding: 20px 24px; margin-bottom: 12px; }
+.cc-card h2 { font-size: 1.05rem; margin: 0 0 12px; }
+
+.cc-btn {
+    display: block; width: 100%; padding: 10px; border: 0; border-radius: 8px;
+    background: var(--cc-btn); color: #fff; text-align: center;
+    font-size: 0.75rem; text-decoration: none; cursor: pointer;
+}
+
+.cc-btn.is-disabled { opacity: 0.45; pointer-events: none; }
+
+/* ---------- Keranjang ---------- */
+.cart-layout { display: flex; gap: 32px; align-items: flex-start; justify-content: center;
+               max-width: 1100px; margin: 0 auto;}
+.cart-list { flex: 0 1 640px; }
+.cart-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.cart-check-all, .cart-store-name { display: flex; align-items: center; gap: 12px; }
+.cart-check-all small { color: #999; font-weight: 400; }
+.cart-delete-btn { background: none; border: 0; font-weight: 600; cursor: pointer; }
+.cart-store-name { font-weight: 500; margin-bottom: 12px; }
+
+.cart-item { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
+.cart-item-img {
+    width: 66px;
+    height: 66px;
+    object-fit: contain;
+    background: #fff;
+    border: 1px solid #e3dcc0;
+    flex-shrink: 0;
+    display: block;
+}
+.cart-item-info { flex: 1; }
+.cart-item-name { font-size: 0.85rem; margin: 0; }
+.cart-item-var { font-size: 0.6rem; margin: 4px 0 0; }
+.cart-item-right { text-align: right; }
+.cart-item-price { margin: 0 0 6px; }
+
+.qty-stepper {
+    display: inline-flex; align-items: center; gap: 14px;
+    border: 1px solid var(--cc-dark); border-radius: 6px; padding: 2px 10px;
+}
+.qty-btn { background: none; border: 0; cursor: pointer; font-size: 1rem; }
+
+.cart-summary { flex: 0 0 360px; }
+.summary-row, .summary-line { display: flex; justify-content: space-between; }
+.summary-total { font-weight: 700; margin: 24px 0; }
+.summary-line { font-size: 0.7rem; padding: 10px 0; border-bottom: 1px solid #ddd; }
+
+.cc-page input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 20px; height: 20px; display: grid; place-content: center;
+    border: 1px solid #cfc8b0; border-radius: 4px; background: #fff; cursor: pointer;
+}
+.cc-page input[type="checkbox"]:checked { background: var(--cc-dark); border-color: var(--cc-dark); }
+.cc-page input[type="checkbox"]:checked::after { content: "✓"; color: #fff; font-size: 13px; line-height: 1; }
+
+.qty-btn:disabled { opacity: 0.35; cursor: default; }
+.qty-stepper { user-select: none; }
+
+.cc-modal {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.cc-modal[hidden] { display: none; }
+.cc-modal-box {
+    background: var(--cc-card); width: 360px; max-width: 90vw;
+    padding: 24px 28px; border-radius: 12px;
+}
+.cc-modal-box h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.cc-modal-box p { margin: 0 0 20px; font-size: 0.85rem; }
+.cc-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.cc-modal-actions button {
+    padding: 8px 18px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;
+    border: 1px solid var(--cc-dark); background: transparent; color: var(--cc-dark);
+}
+.cc-modal-actions .cc-modal-confirm { background: var(--cc-dark); color: #fff; }
+
+
+
+/* Checkout */
+.checkout-form { max-width: 760px; margin: 0 auto; }
+.co-row-between { display: flex; justify-content: space-between; }
+.co-link { background: none; border: 0; font-weight: 700; cursor: pointer; }
+
+.pill-row { display: flex; gap: 24px; flex-wrap: wrap; }
+.pill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 40px; }
+.pill input { display: none; }
+.pill label {
+    display: block; padding: 8px 24px; background: var(--cc-pill);
+    border-radius: 8px; cursor: pointer;
+}
+.pill-wide label { border-radius: 20px; }
+.pill input:checked + label { background: var(--cc-dark); color: #fff; }
+
+.co-error { color: #b3261e; }
+.co-error-text { color: #b3261e; margin: 4px 0 0; }
+.co-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; text-align: left; }
+.co-field input, .co-field textarea {
+    width: 100%; box-sizing: border-box;
+    padding: 8px 10px; border: 1px solid #9aa89a; border-radius: 6px; font: inherit;
+}
+.co-field textarea { min-height: 110px; resize: vertical; }
+
+/* Pop up alamat di checkout */
+#addr-modal .cc-modal-box {
+    width: min(560px, 92vw);
+    box-sizing: border-box;
+    padding: 28px 32px;
+}

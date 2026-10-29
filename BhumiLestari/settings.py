@@ -99,6 +99,7 @@ WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
 USE_CLOUDINARY = PRODUCTION or os.getenv('USE_CLOUDINARY', 'False').lower() == 'true'
+POSTGRES_SCHEMA = os.getenv('SCHEMA') or 'bhumilestari'
 
 if PRODUCTION:
     DATABASES = {
@@ -110,10 +111,45 @@ if PRODUCTION:
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT'),
             'OPTIONS': {
-                'options': f"-c search_path={os.getenv('SCHEMA', 'public')}"
+                'options': f'-c search_path={POSTGRES_SCHEMA},public'
             }
         }
     }
+
+    from django.db.backends.signals import connection_created
+    from django.db.models.signals import pre_migrate
+    from django.dispatch import receiver
+
+    _schema_ensured = False
+
+    def _ensure_postgres_schema(connection):
+        global _schema_ensured
+        if _schema_ensured or connection.vendor != 'postgresql':
+            return
+        with connection.cursor() as cursor:
+            # Create the schema if the role is allowed to (no-op if it exists).
+            cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+            # Persist search_path at the role level so it survives connection
+            # pooling / DISCARD ALL (e.g. PgBouncer transaction mode).
+            cursor.execute(
+                f'ALTER ROLE CURRENT_USER SET search_path TO "{POSTGRES_SCHEMA}", public;'
+            )
+            # Apply it to the current session right away too.
+            cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+        _schema_ensured = True
+
+    def _ensure_postgres_schema_on_connect(sender, connection, **kwargs):
+        _ensure_postgres_schema(connection)
+
+    connection_created.connect(
+        _ensure_postgres_schema_on_connect,
+        dispatch_uid='ensure_postgres_schema_on_connect',
+    )
+
+    @receiver(pre_migrate, dispatch_uid='ensure_postgres_schema_pre_migrate')
+    def _ensure_postgres_schema_pre_migrate(sender, app_config, verbosity, interactive, using, plan, apps, **kwargs):
+        from django.db import connections
+        _ensure_postgres_schema(connections[using])
 else:
     DATABASES = {
         'default': {
@@ -132,6 +168,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTION' : {'min_length' : 8}
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -192,3 +229,4 @@ if USE_CLOUDINARY:
         "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     }
+LOGIN_URL = 'users:login'

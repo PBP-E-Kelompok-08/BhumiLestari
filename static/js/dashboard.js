@@ -50,7 +50,8 @@ function renderActions(product, role, loginUrl) {
     <a href="${escapeHtml(product.edit_url)}" class="dash-btn dash-btn-edit">Edit Item</a>`;
 
   const cartButton = `
-    <button type="button" class="dash-btn dash-btn-cart">+ Tambah ke Keranjang</button>`;
+    <button type="button" class="dash-btn dash-btn-cart"
+      data-product-id="${escapeHtml(product.id)}">+ Tambah ke Keranjang</button>`;
 
   const loginLink = `
     <a href="${escapeHtml(loginUrl)}" class="dash-btn dash-btn-cart">+ Tambah ke Keranjang</a>`;
@@ -81,6 +82,13 @@ function renderStatus(product, role) {
   return badge + note;
 }
 
+function renderRating(product) {
+  if (!product.jumlah_ulasan) {
+    return `<p class="dash-rating dash-rating-kosong">Belum ada ulasan</p>`;
+  }
+  return `<p class="dash-rating"><span class="dash-rating-bintang">★</span> ${escapeHtml(product.rating_teks)} <small>(${product.jumlah_ulasan} ulasan)</small></p>`;
+}
+
 function renderCard(product, role, loginUrl) {
   const image = product.image
     ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">`
@@ -98,9 +106,10 @@ function renderCard(product, role, loginUrl) {
         <span>Rp. ${formatRupiah(product.final_price)}</span>
         ${discount}
       </div>
+      ${renderRating(product)}
       ${renderStatus(product, role)}
       <div class="dash-card-actions">
-        <a href="#" class="dash-btn dash-btn-review">Lihat Review</a>
+        <a href="${escapeHtml(product.review_url)}" class="dash-btn dash-btn-review">Lihat Review</a>
         ${renderActions(product, role, loginUrl)}
       </div>
     </article>`;
@@ -165,6 +174,32 @@ grid.addEventListener("click", (event) => {
   deleteForm.action = button.dataset.deleteUrl;
   deleteName.textContent = button.dataset.name;
   deletePopover.showPopover();
+});
+
+grid.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-product-id]");
+  if (!button) return;
+
+  const originalText = button.textContent;
+  button.disabled = true;
+
+  try {
+    const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    const res = await fetch(`/cart/add/${button.dataset.productId}/`, {
+      method: "POST",
+      headers: { "X-CSRFToken": csrf },
+    });
+    const data = await res.json();
+    button.textContent = data.ok ? "✓ Ditambahkan" : (data.error || "Gagal");
+  } catch (error) {
+    console.error("Gagal menambah ke keranjang:", error);
+    button.textContent = "Gagal, coba lagi";
+  }
+
+  setTimeout(() => {
+    button.textContent = originalText;
+    button.disabled = false;
+  }, 1500);
 });
 
 cari();

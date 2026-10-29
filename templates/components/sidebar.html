@@ -42,6 +42,11 @@
                 Laporan Penjualan</a>
             </li>
             <li>
+                <a href="{% url 'reviews:halaman_penjual' %}">
+                    <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ulasan toko">
+                    Ulasan Toko</a>
+            </li>
+            <li>
                 <a href="{% url 'chat:seller_chat' %}">
                 <img class="sidebar-logo" src="{% static 'img/chat.png' %}" alt="Logo chat">
                 Chat</a>
@@ -49,7 +54,7 @@
 
         {% elif user.role == "buyer" %}
             <li>
-                <a href="#">
+                <a href="{% url 'checkout:show_cart' %}">
                     <img class="sidebar-logo" src="{% static 'img/keranjang.png' %}" alt="Logo keranjang">
                     Keranjang</a>
             </li>
@@ -63,12 +68,19 @@
                 <img class="sidebar-logo" src="{% static 'img/riwayat_beli.png' %}" alt="Logo riwayat beli">
                 Riwayat Pembelian</a>
             </li>
+            <li>
+                <a href="{% url 'reviews:halaman_saya' %}">
+                    <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo ulasan saya">
+                    Ulasan Saya</a>
+            </li>
         {% endif %}
     </ul>
 
     {% if user.is_authenticated %}
         <div class="sidebar-user">
-            <img class="sidebar-avatar" src="{% static 'img/user.png' %}" alt="Foto profil user">
+            <img class="nav-avatar"
+                src="{% if user.logo %}{{ user.logo.url }}{% else %}{% static 'img/user.png' %}{% endif %}"
+                alt="Logo akun">
 
             {% if user.is_superuser %}
                 <div class = "user-info"><strong>Admin</strong><br>Etmin</div>
