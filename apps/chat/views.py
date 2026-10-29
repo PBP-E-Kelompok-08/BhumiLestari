@@ -1816,6 +1816,12 @@ def list_broadcast_channels_api(request):
 
     channels_qs = BroadcastChannel.objects.all().order_by("-followers_count")
 
+    # Filter saluran: hanya tampilkan channel yang difollow, ditambahkan, atau dimiliki (jika seller)
+    user_channels_filter = Q(followers=request.user) | Q(added_by=request.user)
+    if getattr(request.user, "role", "") == "seller":
+        user_channels_filter |= Q(seller=request.user)
+    channels_qs = channels_qs.filter(user_channels_filter).distinct()
+
     if tab == "diarsipkan":
         channels_qs = channels_qs.filter(archived_by=request.user)
     else:
@@ -1839,6 +1845,7 @@ def list_broadcast_channels_api(request):
 
         is_archived = c.archived_by.filter(id=request.user.id).exists()
         is_owner = c.seller_id == request.user.id
+        is_following = c.followers.filter(id=request.user.id).exists()
         item_data = {
             "id": c.id,
             "name": c.name,
@@ -1847,6 +1854,7 @@ def list_broadcast_channels_api(request):
             "followers_count": c.followers_count,
             "is_archived": is_archived,
             "is_owner": is_owner,
+            "is_following": is_following,
             "last_message": {
                 "content": last_msg.content if last_msg else None,
                 "created_at": last_msg.created_at.isoformat() if last_msg else None,
@@ -1903,6 +1911,153 @@ def toggle_archive_broadcast_channel_api(request, channel_id):
 
 
 @login_required
+def toggle_follow_broadcast_channel_api(request, channel_id):
+    """
+    Mengikuti (follow) atau berhenti mengikuti (unfollow) saluran broadcast toko.
+
+    Metode: POST
+    Endpoint: `/chat/api/broadcast/channels/<channel_id>/follow/`
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        channel_id (int): ID saluran broadcast.
+
+    Returns:
+        JsonResponse: Status follow terbaru `{"status": "success", "is_following": bool, "followers_count": int}`.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    channel = get_object_or_404(BroadcastChannel, id=channel_id)
+    if channel.seller == request.user:
+        return _json_error("Anda tidak dapat mengikuti channel Anda sendiri.", status=400)
+
+    if channel.followers.filter(id=request.user.id).exists():
+        channel.followers.remove(request.user)
+        is_following = False
+    else:
+        channel.followers.add(request.user)
+        is_following = True
+
+    channel.followers_count = channel.followers.count()
+    channel.save(update_fields=["followers_count"])
+
+    return JsonResponse({
+        "status": "success",
+        "channel_id": channel.id,
+        "is_following": is_following,
+        "followers_count": channel.followers_count,
+        "message": f"Berhasil {'mengikuti' if is_following else 'berhenti mengikuti'} {channel.name}."
+    })
+
+
+@login_required
+def explore_broadcast_channels_api(request):
+    """
+    Mencari dan merekomendasikan saluran siaran toko untuk ditambahkan pengguna ke daftar saluran mereka.
+
+    Metode: GET
+    Endpoint: `/chat/api/broadcast/channels/explore/?q=<query>`
+
+    Alur:
+    1. Memastikan semua penjual memiliki channel siaran resmi.
+    2. Mengambil seluruh channel toko kecuali channel milik user sendiri.
+    3. Jika terdapat parameter query 'q', memfilter berdasarkan nama channel, deskripsi, nama toko, atau nama penjual.
+    4. Jika 'q' kosong, mengembalikan rekomendasi channel dengan pengikut terbanyak.
+    5. Menyertakan informasi apakah channel sudah ada di list (`is_added`) atau sudah di-follow (`is_following`).
+
+    Args:
+        request (HttpRequest): Request pengguna.
+
+    Returns:
+        JsonResponse: Objek respons JSON berisi daftar channel toko yang tersedia.
+    """
+    if request.method != "GET":
+        return _json_error("Hanya metode GET yang diizinkan.", status=405)
+
+    _ensure_all_sellers_have_broadcast_channels()
+
+    q = request.GET.get("q", "").strip()
+
+    channels_qs = BroadcastChannel.objects.exclude(seller=request.user)
+    if q:
+        channels_qs = channels_qs.filter(
+            Q(name__icontains=q) |
+            Q(description__icontains=q) |
+            Q(seller__full_name__icontains=q) |
+            Q(seller__seller_profile__store_name__icontains=q)
+        ).distinct()[:15]
+    else:
+        channels_qs = channels_qs.order_by("-followers_count")[:15]
+
+    results = []
+    for c in channels_qs:
+        store_name = _get_seller_store_name(c.seller)
+        is_following = c.followers.filter(id=request.user.id).exists()
+        is_added = c.added_by.filter(id=request.user.id).exists()
+        results.append({
+            "id": c.id,
+            "name": c.name,
+            "store_name": store_name,
+            "description": c.description,
+            "followers_count": c.followers_count,
+            "is_following": is_following,
+            "is_added": is_added,
+        })
+
+    return JsonResponse({
+        "status": "success",
+        "total": len(results),
+        "channels": results,
+    })
+
+
+@login_required
+def add_broadcast_channel_to_list_api(request, channel_id):
+    """
+    Menambahkan saluran siaran toko ke daftar saluran (channel list) pengguna.
+    Sesuai kebutuhan: Saluran yang ditambahkan TIDAK otomatis terfollow, namun langsung
+    masuk ke dalam daftar channel pengguna agar dapat dilihat/diakses.
+
+    Metode: POST
+    Endpoint: `/chat/api/broadcast/channels/<channel_id>/add/`
+
+    Args:
+        request (HttpRequest): Request pengguna.
+        channel_id (int): ID saluran siaran yang akan ditambahkan.
+
+    Returns:
+        JsonResponse: Data saluran siaran yang berhasil ditambahkan ke daftar pengguna.
+    """
+    if request.method != "POST":
+        return _json_error("Hanya metode POST yang diizinkan.", status=405)
+
+    channel = get_object_or_404(BroadcastChannel, id=channel_id)
+    if channel.seller == request.user:
+        return _json_error("Ini adalah saluran toko Anda sendiri.", status=400)
+
+    # Tambahkan ke daftar channel pengguna tanpa mem-follow
+    channel.added_by.add(request.user)
+
+    is_following = channel.followers.filter(id=request.user.id).exists()
+    is_archived = channel.archived_by.filter(id=request.user.id).exists()
+
+    return JsonResponse({
+        "status": "success",
+        "channel": {
+            "id": channel.id,
+            "name": channel.name,
+            "description": channel.description,
+            "followers_count": channel.followers_count,
+            "is_owner": False,
+            "is_following": is_following,
+            "is_archived": is_archived,
+        },
+        "message": f"Saluran {channel.name} berhasil ditambahkan ke daftar channel Anda."
+    })
+
+
+@login_required
 def get_broadcast_messages_api(request, channel_id):
     """
     Mengambil seluruh pesan siaran pada suatu channel dan menaikkan hitungan viewed_count.
@@ -1913,7 +2068,7 @@ def get_broadcast_messages_api(request, channel_id):
     Fitur:
     - Jika pengguna yang membaca bukan pemilik (seller) channel tersebut,
       naikkan hitungan `viewed_count` secara atomik (`F('viewed_count') + 1`).
-    - Kembalikan status kepemilikan `is_owner`.
+    - Kembalikan status kepemilikan `is_owner` dan status `is_following`.
 
     Args:
         request (HttpRequest): Request pengguna.
@@ -1943,6 +2098,7 @@ def get_broadcast_messages_api(request, channel_id):
     ]
 
     is_archived = channel.archived_by.filter(id=request.user.id).exists()
+    is_following = channel.followers.filter(id=request.user.id).exists()
 
     return JsonResponse({
         "status": "success",
@@ -1952,6 +2108,7 @@ def get_broadcast_messages_api(request, channel_id):
             "followers_count": channel.followers_count,
             "is_owner": request.user == channel.seller,
             "is_archived": is_archived,
+            "is_following": is_following,
         },
         "messages": messages,
     })

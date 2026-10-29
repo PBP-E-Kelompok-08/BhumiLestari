@@ -24,6 +24,8 @@
         els.searchInput = document.getElementById("broadcastSearchInput");
         els.tabButtons = document.querySelectorAll(".chat-tab-pill");
         els.channelTitle = document.getElementById("activeChannelTitle");
+        els.followWrap = document.getElementById("activeChannelFollowWrap");
+        els.followBtn = document.getElementById("broadcastFollowBtn");
         els.channelFollowers = document.getElementById("activeChannelFollowers");
         els.messagesContainer = document.getElementById("broadcastMessagesContainer");
         els.mainBody = document.getElementById("broadcastMainBody");
@@ -36,6 +38,15 @@
         els.headerDropdown = document.getElementById("broadcastHeaderDropdownMenu");
         els.dropdownArchiveBtn = document.getElementById("broadcastDropdownArchiveBtn");
         els.shell = document.getElementById("chatShell");
+
+        // Modal Tambah Saluran Toko
+        els.openAddChannelBtn = document.getElementById("openAddChannelBtn");
+        els.addChannelModal = document.getElementById("addChannelModalBackdrop");
+        els.closeAddChannelBtn = document.getElementById("closeAddChannelModalBtn");
+        els.channelExploreInput = document.getElementById("channelExploreSearchInput");
+        els.clearChannelExploreBtn = document.getElementById("clearChannelExploreBtn");
+        els.addChannelLoading = document.getElementById("addChannelDropdownLoading");
+        els.addChannelItems = document.getElementById("addChannelDropdownItems");
 
         if (els.composerFooter) {
             els.composerFooter.style.display = "none";
@@ -59,6 +70,23 @@
             return (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + "k followers";
         }
         return n + " followers";
+    }
+
+    /**
+     * Memperbarui label teks, kelas styling, dan aria-label pada tombol ikuti (Follow / Unfollow).
+     * @param {boolean} isFollowing - True jika user saat ini mengikuti channel siaran ini.
+     */
+    function updateFollowButtonState(isFollowing) {
+        if (!els.followBtn) return;
+        if (isFollowing) {
+            els.followBtn.textContent = "Unfollow";
+            els.followBtn.classList.add("is-following");
+            els.followBtn.setAttribute("aria-label", "Berhenti mengikuti channel ini");
+        } else {
+            els.followBtn.textContent = "Follow";
+            els.followBtn.classList.remove("is-following");
+            els.followBtn.setAttribute("aria-label", "Ikuti channel ini");
+        }
     }
 
     /**
@@ -153,7 +181,10 @@
         if (!els.channelList) return;
         if (state.channels.length === 0) {
             els.channelList.innerHTML =
-                '<li class="chat-sidebar-empty">Tidak ada channel broadcast pada tab ini.</li>';
+                '<li class="chat-sidebar-empty">' +
+                'Belum ada saluran toko di sini.<br>' +
+                '<button type="button" class="js-open-add-channel" style="margin-top: 10px; background: none; border: none; color: #5A6844; font-weight: 700; cursor: pointer; text-decoration: underline;">+ Tambah Saluran Toko</button>' +
+                '</li>';
             return;
         }
 
@@ -250,6 +281,19 @@
             }
 
             var isOwner = Boolean(data.channel && data.channel.is_owner);
+            var isFollowing = Boolean(data.channel && data.channel.is_following);
+
+            if (els.followWrap) {
+                els.followWrap.style.display = "flex";
+            }
+            if (els.followBtn) {
+                if (isOwner) {
+                    els.followBtn.style.display = "none";
+                } else {
+                    els.followBtn.style.display = "inline-flex";
+                    updateFollowButtonState(isFollowing);
+                }
+            }
             if (els.readonlyFooter && els.composerFooter) {
                 if (isOwner) {
                     els.readonlyFooter.style.display = "none";
@@ -294,6 +338,129 @@
             await loadChannels(false);
         } catch (err) {
             ChatCore.showToast(err.message);
+        }
+    }
+
+    var exploreDebounceTimer = null;
+
+    /**
+     * Mengambil daftar saluran toko yang dapat ditambahkan/diikuti melalui endpoint `/chat/api/broadcast/channels/explore/`.
+     * @param {string} query - Kata kunci pencarian (opsional).
+     */
+    async function fetchExploreChannels(query) {
+        if (!els.addChannelItems) return;
+        if (els.addChannelLoading) els.addChannelLoading.hidden = false;
+
+        try {
+            var url = "/chat/api/broadcast/channels/explore/";
+            if (query) {
+                url += "?q=" + encodeURIComponent(query);
+            }
+            var data = await ChatCore.apiFetch(url);
+            renderExploreChannels(data.channels || []);
+        } catch (err) {
+            if (els.addChannelItems) {
+                els.addChannelItems.innerHTML =
+                    '<li class="chat-search-dropdown-empty">Gagal memuat saluran: ' +
+                    ChatCore.escapeHtml(err.message) +
+                    "</li>";
+            }
+        } finally {
+            if (els.addChannelLoading) els.addChannelLoading.hidden = true;
+        }
+    }
+
+    /**
+     * Merender daftar saluran toko hasil pencarian explore ke dalam modal tambah channel.
+     * @param {Array} channels - Daftar saluran toko.
+     */
+    function renderExploreChannels(channels) {
+        if (!els.addChannelItems) return;
+        if (!channels || channels.length === 0) {
+            els.addChannelItems.innerHTML =
+                '<li class="chat-search-dropdown-empty">Tidak ada saluran toko yang ditemukan.</li>';
+            return;
+        }
+
+        var html = "";
+        channels.forEach(function (c) {
+            var initial = (c.store_name || c.name || "T").trim().charAt(0).toUpperCase();
+            var desc = c.description || "Saluran siaran resmi toko.";
+            var followers = formatFollowerCount(c.followers_count);
+
+            html += '<li class="chat-channel-explore-item js-add-channel-item" data-id="' + c.id + '" tabindex="0" role="button" aria-label="Pilih ' + ChatCore.escapeHtml(c.name) + '">';
+            html +=   '<div class="chat-channel-explore-left">';
+            html +=     '<div class="chat-channel-explore-avatar" aria-hidden="true">' + ChatCore.escapeHtml(initial) + "</div>";
+            html +=     '<div class="chat-channel-explore-info">';
+            html +=       '<div class="chat-channel-explore-title-row">';
+            html +=         '<span class="chat-channel-explore-title">' + ChatCore.escapeHtml(c.name) + "</span>";
+            if (c.store_name) {
+                html +=     '<span class="chat-channel-explore-store">' + ChatCore.escapeHtml(c.store_name) + "</span>";
+            }
+            html +=       "</div>";
+            html +=       '<span class="chat-channel-explore-desc">' + ChatCore.escapeHtml(desc) + "</span>";
+            html +=       '<span class="chat-channel-explore-meta">' + ChatCore.escapeHtml(followers) + "</span>";
+            html +=     "</div>";
+            html +=   "</div>";
+            html +=   '<div class="chat-channel-explore-action">';
+            html +=     '<button type="button" class="chat-channel-explore-btn js-btn-add-channel' + (c.is_added ? " is-added" : "") + '" data-id="' + c.id + '">';
+            html +=       c.is_added ? "Buka Saluran" : "+ Tambah";
+            html +=     "</button>";
+            html +=   "</div>";
+            html += "</li>";
+        });
+
+        els.addChannelItems.innerHTML = html;
+        bindExploreItemEvents();
+    }
+
+    /**
+     * Memasang event listener klik dan keyboard pada item explore channel di dalam modal.
+     */
+    function bindExploreItemEvents() {
+        if (!els.addChannelItems) return;
+
+        els.addChannelItems.querySelectorAll(".js-add-channel-item").forEach(function (item) {
+            item.addEventListener("click", function () {
+                var cid = parseInt(item.getAttribute("data-id"), 10);
+                if (cid) {
+                    addChannelToList(cid);
+                }
+            });
+            item.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    var cid = parseInt(item.getAttribute("data-id"), 10);
+                    if (cid) {
+                        addChannelToList(cid);
+                    }
+                }
+            });
+        });
+    }
+
+    /**
+     * Menambahkan saluran siaran toko ke daftar channel pengguna via POST `/chat/api/broadcast/channels/<id>/add/`.
+     * Saluran tidak otomatis terfollow, namun langsung dimasukkan ke channel list dan dibuka.
+     * @param {number} channelId - ID saluran siaran yang dipilih.
+     */
+    async function addChannelToList(channelId) {
+        if (!channelId) return;
+        try {
+            var res = await ChatCore.apiFetch(
+                "/chat/api/broadcast/channels/" + channelId + "/add/",
+                { method: "POST" }
+            );
+
+            ChatCore.closeModal("addChannelModalBackdrop");
+            ChatCore.showToast(res.message || "Saluran toko berhasil ditambahkan ke daftar Anda.");
+
+            // Muat ulang daftar channel pengguna dan langsung pilih channel tersebut
+            await loadChannels(true);
+            selectChannel(channelId);
+            if (els.shell) els.shell.classList.add("mobile-thread-active");
+        } catch (err) {
+            ChatCore.showToast(err.message || "Gagal menambahkan saluran toko.");
         }
     }
 
@@ -447,6 +614,112 @@
         if (els.dropdownArchiveBtn) {
             els.dropdownArchiveBtn.addEventListener("click", function () {
                 toggleArchiveChannel(state.activeChannelId);
+            });
+        }
+
+        // Toggle follow / unfollow button click
+        if (els.followBtn) {
+            els.followBtn.addEventListener("click", async function () {
+                if (!state.activeChannelId) return;
+                if (state.activeChannelData && state.activeChannelData.is_owner) return;
+
+                var channelId = state.activeChannelId;
+                els.followBtn.disabled = true;
+
+                try {
+                    var res = await ChatCore.apiFetch(
+                        "/chat/api/broadcast/channels/" + channelId + "/follow/",
+                        { method: "POST" }
+                    );
+
+                    var newFollowState = Boolean(res.is_following);
+                    updateFollowButtonState(newFollowState);
+
+                    if (els.channelFollowers && typeof res.followers_count !== "undefined") {
+                        els.channelFollowers.textContent = formatFollowerCount(res.followers_count);
+                    }
+
+                    if (state.activeChannelData && state.activeChannelData.id === channelId) {
+                        state.activeChannelData.is_following = newFollowState;
+                        state.activeChannelData.followers_count = res.followers_count;
+                    }
+
+                    var ch = state.channels.find(function (c) { return c.id === channelId; });
+                    if (ch) {
+                        ch.is_following = newFollowState;
+                        ch.followers_count = res.followers_count;
+                    }
+
+                    ChatCore.showToast(
+                        res.message || (newFollowState ? "Berhasil mengikuti channel!" : "Berhenti mengikuti channel.")
+                    );
+                } catch (err) {
+                    ChatCore.showToast(err.message || "Gagal mengubah status ikuti.");
+                } finally {
+                    els.followBtn.disabled = false;
+                }
+            });
+        }
+
+        // Buka modal Tambah Saluran Toko via tombol header (+)
+        if (els.openAddChannelBtn) {
+            els.openAddChannelBtn.addEventListener("click", function () {
+                if (els.channelExploreInput) {
+                    els.channelExploreInput.value = "";
+                }
+                if (els.clearChannelExploreBtn) {
+                    els.clearChannelExploreBtn.hidden = true;
+                }
+                ChatCore.openModal("addChannelModalBackdrop");
+                fetchExploreChannels("");
+                setTimeout(function () {
+                    if (els.channelExploreInput) {
+                        els.channelExploreInput.focus();
+                    }
+                }, 120);
+            });
+        }
+
+        // Delegasi buka modal jika diklik dari tombol empty state di sidebar
+        if (els.channelList) {
+            els.channelList.addEventListener("click", function (e) {
+                var btn = e.target.closest(".js-open-add-channel");
+                if (btn && els.openAddChannelBtn) {
+                    els.openAddChannelBtn.click();
+                }
+            });
+        }
+
+        // Tutup modal Tambah Saluran Toko
+        if (els.closeAddChannelBtn) {
+            els.closeAddChannelBtn.addEventListener("click", function () {
+                ChatCore.closeModal("addChannelModalBackdrop");
+            });
+        }
+
+        // Pencarian dengan AJAX debounce pada modal Tambah Saluran Toko
+        if (els.channelExploreInput) {
+            els.channelExploreInput.addEventListener("input", function () {
+                var val = els.channelExploreInput.value.trim();
+                if (els.clearChannelExploreBtn) {
+                    els.clearChannelExploreBtn.hidden = !val;
+                }
+                clearTimeout(exploreDebounceTimer);
+                exploreDebounceTimer = setTimeout(function () {
+                    fetchExploreChannels(val);
+                }, 250);
+            });
+        }
+
+        // Bersihkan input pencarian saluran toko
+        if (els.clearChannelExploreBtn) {
+            els.clearChannelExploreBtn.addEventListener("click", function () {
+                if (els.channelExploreInput) {
+                    els.channelExploreInput.value = "";
+                    els.channelExploreInput.focus();
+                }
+                els.clearChannelExploreBtn.hidden = true;
+                fetchExploreChannels("");
             });
         }
 

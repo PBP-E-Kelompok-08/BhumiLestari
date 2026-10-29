@@ -284,6 +284,16 @@ class BroadcastChannel(models.Model):
         related_name="archived_broadcast_channels",
         blank=True
     )
+    followers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="followed_broadcast_channels",
+        blank=True
+    )
+    added_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="added_broadcast_channels",
+        blank=True
+    )
 
     def __str__(self):
         """Representasi string nama saluran siaran."""
