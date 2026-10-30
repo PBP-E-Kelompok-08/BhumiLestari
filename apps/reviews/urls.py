@@ -9,6 +9,8 @@ urlpatterns = [
     path("halaman/toko/<int:toko_id>/", views.halaman_toko, name="halaman_toko"),
     path("halaman/saya/", views.halaman_saya, name="halaman_saya"),
     path("halaman/penjual/", views.halaman_penjual, name="halaman_penjual"),
+    path("moderasi/", views.halaman_moderasi, name="moderasi"),
+    path("moderasi/<int:pk>/", views.moderasi_laporan, name="moderasi_laporan"),
     # baca (JSON)
     path("toko/<int:toko_id>/", views.daftar_ulasan, name="daftar"),
     path("saya/", views.ulasan_saya, name="saya"),

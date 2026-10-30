@@ -2,6 +2,7 @@ import time
 import uuid
 from functools import wraps
 
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -122,6 +123,10 @@ def _toko_milik(user):
     return getattr(user, "seller_profile", None)
 
 
+def _adalah_admin(user):
+    return user.is_authenticated and user.is_staff
+
+
 def _qs_ulasan():
     return UlasanToko.objects.select_related("pembeli", "toko", "balasan", "produk").prefetch_related(
         "foto", "laporan"
@@ -130,9 +135,11 @@ def _qs_ulasan():
 
 def _serialisasi(u, user):
     login = user.is_authenticated
+    admin = _adalah_admin(user)
     milik_saya = login and u.pembeli_id == user.id
     pemilik_toko = login and u.toko.user_id == user.id
     balasan = getattr(u, "balasan", None)
+    laporan_admin = next(iter(u.laporan.all()), None) if admin else None
     foto = [f.gambar.url for f in u.foto.all()]
     p = u.produk  # None bila produk sudah dihapus
     return {
@@ -157,8 +164,20 @@ def _serialisasi(u, user):
         "jumlah_foto": len(foto),
         "foto_terkunci": (not login) and bool(foto),
         "milik_saya": milik_saya,
+        "bisa_dihapus": milik_saya or admin,
         "bisa_diedit": milik_saya and u.bisa_diedit(),
-        "disembunyikan": u.disembunyikan if milik_saya else False,
+        "disembunyikan": u.disembunyikan if milik_saya or admin else False,
+        "laporan_admin": (
+            {
+                "id": laporan_admin.pk,
+                "alasan": laporan_admin.alasan,
+                "status": laporan_admin.status,
+                "status_display": laporan_admin.get_status_display(),
+                "pelapor": _nama(laporan_admin.pelapor),
+            }
+            if laporan_admin
+            else None
+        ),
         "balasan": (
             {
                 "pesan": balasan.pesan,
@@ -332,7 +351,7 @@ def edit_ulasan(request, pk):
 @api_login_required
 def hapus_ulasan(request, pk):
     ulasan = get_object_or_404(UlasanToko, pk=pk)
-    if ulasan.pembeli_id != request.user.id and not request.user.is_staff:
+    if ulasan.pembeli_id != request.user.id and not _adalah_admin(request.user):
         return _err("Anda hanya dapat menghapus ulasan sendiri.", 403)
     toko_id = ulasan.toko_id
     ulasan.delete()
@@ -421,6 +440,59 @@ def laporkan_ulasan(request, pk):
     except IntegrityError:
         return _err("Anda sudah melaporkan ulasan ini.", 409)
     return JsonResponse({"ok": True, "pesan": "Laporan terkirim dan akan ditinjau admin."}, status=201)
+
+
+# ---------- Admin: moderasi laporan ----------
+@require_GET
+def halaman_moderasi(request):
+    if not request.user.is_authenticated:
+        return redirect("users:login")
+    if not _adalah_admin(request.user):
+        return redirect("dashboard:show_dashboard_home")
+
+    laporan = (
+        LaporanUlasan.objects.filter(status=LaporanUlasan.STATUS_MENUNGGU)
+        .select_related("pelapor", "ulasan__pembeli", "ulasan__toko", "ulasan__produk")
+        .prefetch_related("ulasan__foto")
+    )
+    return render(
+        request,
+        "reviews/moderasi.html",
+        {"laporan": laporan, "jumlah_laporan": laporan.count()},
+    )
+
+
+@require_POST
+@api_login_required
+def moderasi_laporan(request, pk):
+    if not _adalah_admin(request.user):
+        return _err("Hanya admin yang dapat meninjau laporan ulasan.", 403)
+
+    laporan = get_object_or_404(
+        LaporanUlasan.objects.select_related("ulasan"), pk=pk
+    )
+    if laporan.status != LaporanUlasan.STATUS_MENUNGGU:
+        messages.info(request, "Laporan ini sudah pernah ditinjau.")
+        return redirect("reviews:moderasi")
+
+    aksi = request.POST.get("aksi")
+    if aksi == "terima":
+        laporan.ulasan.disembunyikan = True
+        laporan.ulasan.save(update_fields=["disembunyikan"])
+        laporan.status = LaporanUlasan.STATUS_DITERIMA
+        laporan.save(update_fields=["status"])
+        messages.success(request, "Laporan diterima dan ulasan disembunyikan.")
+    elif aksi == "tolak":
+        laporan.status = LaporanUlasan.STATUS_DITOLAK
+        laporan.save(update_fields=["status"])
+        messages.success(request, "Laporan ditolak dan ulasan tetap ditampilkan.")
+    elif aksi == "hapus":
+        laporan.ulasan.delete()
+        messages.success(request, "Ulasan berhasil dihapus permanen.")
+    else:
+        messages.error(request, "Aksi moderasi tidak valid.")
+
+    return redirect("reviews:moderasi")
 
 
 # ---------------------------------------------------------------------------

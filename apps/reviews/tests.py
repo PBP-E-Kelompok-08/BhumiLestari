@@ -246,6 +246,87 @@ class ViewDashboardTest(DasarTest):
         self.assertEqual(r.status_code, 200)
 
 
+class ModerasiAdminTest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        self.admin = buat_admin()
+        self.ulasan = buat_ulasan(
+            self.toko,
+            self.b1,
+            self.produk,
+            1,
+            komentar="Barang tidak sesuai deskripsi",
+        )
+        self.laporan = LaporanUlasan.objects.create(
+            ulasan=self.ulasan,
+            pelapor=self.seller_user,
+            alasan="Komentar mengandung informasi yang tidak benar",
+        )
+
+    def test_admin_melihat_antrean_dan_alasan_laporan(self):
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("reviews:moderasi"))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Moderasi Ulasan")
+        self.assertContains(r, self.laporan.alasan)
+        self.assertContains(r, self.ulasan.komentar)
+
+    def test_non_admin_tidak_bisa_membuka_moderasi(self):
+        self.client.force_login(self.b1)
+        r = self.client.get(reverse("reviews:moderasi"))
+        self.assertRedirects(
+            r, reverse("dashboard:show_dashboard_home"), fetch_redirect_response=False
+        )
+        r = self.client.post(
+            reverse("reviews:moderasi_laporan", args=[self.laporan.pk]),
+            {"aksi": "terima"},
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_admin_menerima_laporan_dan_menyembunyikan_ulasan(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(
+            reverse("reviews:moderasi_laporan", args=[self.laporan.pk]),
+            {"aksi": "terima"},
+        )
+        self.assertRedirects(r, reverse("reviews:moderasi"))
+        self.laporan.refresh_from_db()
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.laporan.status, LaporanUlasan.STATUS_DITERIMA)
+        self.assertTrue(self.ulasan.disembunyikan)
+
+    def test_admin_menolak_laporan(self):
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse("reviews:moderasi_laporan", args=[self.laporan.pk]),
+            {"aksi": "tolak"},
+        )
+        self.laporan.refresh_from_db()
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.laporan.status, LaporanUlasan.STATUS_DITOLAK)
+        self.assertFalse(self.ulasan.disembunyikan)
+
+    def test_admin_bisa_menghapus_ulasan_tanpa_laporan(self):
+        ulasan_tanpa_laporan = buat_ulasan(self.toko, self.b2, self.produk, 2)
+        self.client.force_login(self.admin)
+        data = self.client.get(reverse("reviews:daftar", args=[self.toko.pk])).json()
+        serialized = next(u for u in data["ulasan"] if u["id"] == ulasan_tanpa_laporan.pk)
+        self.assertTrue(serialized["bisa_dihapus"])
+        self.assertIsNone(serialized["laporan_admin"])
+
+        r = self.client.post(reverse("reviews:hapus", args=[ulasan_tanpa_laporan.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(UlasanToko.objects.filter(pk=ulasan_tanpa_laporan.pk).exists())
+
+    def test_admin_melihat_laporan_pada_kartu_ulasan(self):
+        self.client.force_login(self.admin)
+        data = self.client.get(reverse("reviews:daftar", args=[self.toko.pk])).json()
+        serialized = next(u for u in data["ulasan"] if u["id"] == self.ulasan.pk)
+        self.assertTrue(serialized["bisa_dihapus"])
+        self.assertEqual(serialized["laporan_admin"]["status"], "menunggu")
+        self.assertEqual(serialized["laporan_admin"]["alasan"], self.laporan.alasan)
+
+
 class TambahUlasanUUIDTest(DasarTest):
     def setUp(self):
         super().setUp()

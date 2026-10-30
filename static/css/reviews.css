@@ -306,6 +306,13 @@
 
 .rv-komentar { margin: 0.1rem 0 0.4rem; font-size: 0.92rem; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
 .rv-peringatan { margin: 0.3rem 0; padding: 0.45rem 0.7rem; background: #f8dedb; color: #a63a30; border-radius: 0.5rem; font-size: 0.85rem; }
+.rv-laporan-admin { display: grid; gap: 0.2rem; margin: 0.45rem 0; padding: 0.65rem 0.8rem; background: #fff2d9; color: #765215; border: 1px solid #e8cf9d; border-radius: 0.55rem; font-size: 0.85rem; }
+.rv-laporan-admin a { color: var(--rv-ink); font-weight: 700; }
+.rv-moderasi { margin-top: 1rem; }
+.rv-moderasi-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.rv-moderasi-count { padding: 0.35rem 0.8rem; background: #fff2d9; color: #765215; border-radius: 999px; font-weight: 700; }
+.rv-item-moderasi { grid-template-columns: 2.4rem 1fr; }
+.rv-moderasi-aksi { align-items: center; }
 .rv-kunci { margin: 0.3rem 0 0.4rem; font-size: 0.82rem; color: #57665d; }
 .rv-kunci a { color: var(--rv-ink); font-weight: 600; }
 

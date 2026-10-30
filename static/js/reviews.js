@@ -202,7 +202,7 @@
         : "";
     const aksi = [];
     if (u.bisa_diedit) aksi.push('<button type="button" class="rv-link" data-aksi="edit">Edit</button>');
-    if (u.milik_saya) aksi.push('<button type="button" class="rv-link rv-link-bahaya" data-aksi="hapus">Hapus</button>');
+    if (u.bisa_dihapus) aksi.push('<button type="button" class="rv-link rv-link-bahaya" data-aksi="hapus">Hapus</button>');
     if (u.bisa_dibalas) aksi.push('<button type="button" class="rv-link" data-aksi="balas">Balas</button>');
     if (u.bisa_dilaporkan) aksi.push('<button type="button" class="rv-link rv-link-bahaya" data-aksi="laporkan">Laporkan</button>');
 
@@ -223,6 +223,12 @@
             ${u.terverifikasi ? '<span class="rv-badge rv-st-beli">Pembelian terverifikasi</span>' : ""}
           </p>
           ${u.disembunyikan ? '<p class="rv-peringatan">Ulasan ini disembunyikan admin dan tidak tampil ke publik.</p>' : ""}
+          ${u.laporan_admin ? `
+            <div class="rv-laporan-admin">
+              <strong>Laporan ${esc(u.laporan_admin.status_display)}</strong>
+              <span>oleh ${esc(u.laporan_admin.pelapor)}: ${esc(u.laporan_admin.alasan)}</span>
+              ${u.laporan_admin.status === "menunggu" ? `<a href="${esc(D.urlModerasi)}">Tinjau laporan</a>` : ""}
+            </div>` : ""}
           ${u.komentar ? `<p class="rv-komentar">${esc(u.komentar)}</p>` : ""}
           ${renderFoto(u)}
           ${renderBalasan(u)}
