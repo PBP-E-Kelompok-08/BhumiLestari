@@ -110,3 +110,74 @@ Berikut adalah link percakapan AI yang mendokumentasikan proses diskusi, impleme
 <li>https://chatgpt.com/s/cx_6ae4a43362888191ae7bde88fbadb103</li>
 </ul>
 </div>
+
+<br></br>
+# Local Setup
+
+### 1. Clone Repository
+```bash
+git clone <url-repository>
+cd BhumiLestari
+```
+
+### 2. Buat dan Aktifkan Virtual Environment
+Linux/macOS:
+```bash
+python3 -m venv env
+source env/bin/activate
+```
+
+Windows (PowerShell/CMD):
+```bash
+python -m venv env
+env\Scripts\activate
+```
+
+### 3. Install Dependensi
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Siapkan File `.env`
+Salin `.env.example` menjadi `.env`:
+```bash
+cp .env.example .env
+```
+
+Untuk development lokal, isi `.env` dengan:
+```
+PRODUCTION=False
+MOCK_API_WRITE_TOKEN=pWm_-77aDgzp0VcKlUfy9vms-6wkZkspP1HtIgWzAi28dnPkpRCmyAmg4IbRn0_j
+EMAIL_HOST_USER=[Email untuk mengirim OTP]
+EMAIL_HOST_PASSWORD=[Password dari email pengirim OTP]
+
+(optional)
+DJANGO_SECRET_KEY=[isi-dengan-string-acak-panjang]
+API_KEY=[API key openrouter]
+```
+
+Catatan:
+- `PRODUCTION=False` membuat project memakai database SQLite (`db.sqlite3`) dan menyimpan media di folder `media/` lokal.
+- Variabel opsional tambahan: `USE_CLOUDINARY=True` beserta `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` jika ingin memakai Cloudinary.
+
+### 5. Jalankan Migrasi Database
+```bash
+python manage.py migrate
+```
+
+### 7. Jalankan Server Development
+```bash
+python manage.py runserver
+```
+Buka http://127.0.0.1:8000 di browser.
+
+### 8. Menjalankan Test
+```bash
+python manage.py test
+```
+
+### Troubleshooting
+- **`ModuleNotFoundError`**: pastikan virtual environment sudah aktif (prompt terminal menampilkan `(env)`) lalu jalankan ulang `pip install -r requirements.txt`.
+- **`no such table`**: jalankan `python manage.py migrate`.
+- **Port 8000 sudah dipakai**: jalankan dengan port lain, misalnya `python manage.py runserver 8001`.
+- **Gambar produk atau file tidak muncul**: pastikan folder `media/` ada dan `PRODUCTION=False` di `.env`.
