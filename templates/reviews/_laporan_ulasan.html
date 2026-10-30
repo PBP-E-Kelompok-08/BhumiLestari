@@ -19,7 +19,7 @@
     </thead>
     <tbody>
       {% for b in ulasan.baris %}
-      <tr><td>{{ b.nama }}</td><td>{{ b.jumlah }} ulasan</td><td>{{ b.rata }} / 5</td></tr>
+      <tr><td>{{ b.nama }}</td><td>{{ b.jumlah }} ulasan</td><td>{{ b.rata }} / 5,0</td></tr>
       {% empty %}
       <tr><td colspan="3">Belum ada ulasan pada periode ini.</td></tr>
       {% endfor %}

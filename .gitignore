@@ -7,6 +7,8 @@ db.sqlite3
 media
 media/
 
+*.zip
+
 # Backup files
 *.bak
 

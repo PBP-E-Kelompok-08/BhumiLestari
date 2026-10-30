@@ -1,8 +1,8 @@
 <section class="card">
   <h2>Rating Toko</h2>
   {% if ulasan.ringkasan.total %}
-    <div class="stars" aria-label="Rating {{ ulasan.rata_teks }} dari 5">{% for penuh in ulasan.bintang %}{% if penuh %}★{% else %}<span>★</span>{% endif %}{% endfor %}</div>
-    <p class="rating-text"><strong>{{ ulasan.rata_teks }}/5</strong> <small>{{ ulasan.ringkasan.total }} ulasan</small></p>
+    <div class="stars" aria-label="Rating {{ ulasan.rata_teks }} dari 5,0">{% for penuh in ulasan.bintang %}{% if penuh %}★{% else %}<span>★</span>{% endif %}{% endfor %}</div>
+    <p class="rating-text"><strong>{{ ulasan.rata_teks }}/5,0</strong> <small>{{ ulasan.ringkasan.total }} ulasan</small></p>
   {% else %}
     <p class="rating-text">Belum ada ulasan.</p>
   {% endif %}
