@@ -173,9 +173,19 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
             handover_reason=reason,
         )
     else:
+        # Sesi direct yang dipakai ulang harus benar-benar terbuka kembali untuk kedua pihak.
+        # Tanpa reset arsip penjual, handover baru bisa tidak terlihat di inbox penjual.
         direct_session.status = ChatSession.STATUS_ACTIVE
         direct_session.is_archived_by_buyer = False
-        direct_session.save(update_fields=["status", "is_archived_by_buyer", "updated_at"])
+        direct_session.is_archived_by_seller = False
+        direct_session.save(
+            update_fields=[
+                "status",
+                "is_archived_by_buyer",
+                "is_archived_by_seller",
+                "updated_at",
+            ]
+        )
 
     for p_ctx in ai_session.product_contexts.all():
         SessionProductContext.objects.get_or_create(
@@ -731,6 +741,9 @@ def send_ai_message_api(request, session_id):
     if session.session_type != ChatSession.TYPE_AI:
         return _json_error("Sesi ini bukan sesi AI. Gunakan endpoint direct-send.", status=400)
 
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi AI ini sudah selesai dan tidak dapat menerima pesan baru.", status=400)
+
     try:
         data = json.loads(request.body.decode("utf-8")) if request.body else {}
     except json.JSONDecodeError:
@@ -895,6 +908,9 @@ def escalate_to_seller_api(request, session_id):
     if session.session_type != ChatSession.TYPE_AI:
         return _json_error("Sesi ini sudah bukan sesi AI.")
 
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi AI ini sudah selesai dan tidak dapat dialihkan lagi.", status=400)
+
     direct_session = _transfer_to_direct_session(
         session,
         reason=ChatSession.HANDOVER_MANUAL
@@ -938,6 +954,9 @@ def switch_to_ai_session_api(request, session_id):
 
     if session.session_type != ChatSession.TYPE_DIRECT:
         return _json_error("Sesi ini sudah merupakan sesi asisten AI.", status=400)
+
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi obrolan langsung ini sudah selesai.", status=400)
 
     ai_session = _transfer_to_ai_session(session)
 
@@ -1077,6 +1096,9 @@ def send_direct_message_api(request, session_id):
 
     if session.session_type != ChatSession.TYPE_DIRECT:
         return _json_error("Endpoint ini hanya untuk sesi obrolan langsung (direct).", status=400)
+
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi obrolan ini sudah selesai dan tidak dapat menerima pesan baru.", status=400)
 
     try:
         data = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -1287,6 +1309,7 @@ def seller_inbox_sessions_api(request):
     sessions_qs = ChatSession.objects.filter(
         seller=seller,
         session_type=ChatSession.TYPE_DIRECT,
+        status=ChatSession.STATUS_ACTIVE,
         is_archived_by_seller=False
     ).order_by("-updated_at")
 
