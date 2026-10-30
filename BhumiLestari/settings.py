@@ -104,6 +104,15 @@ USE_CLOUDINARY = PRODUCTION or os.getenv('USE_CLOUDINARY', 'False').lower() == '
 POSTGRES_SCHEMA = os.getenv('SCHEMA') or 'bhumilestari'
 
 if PRODUCTION:
+    # PWS terminates HTTPS at its reverse proxy and forwards the original scheme.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Start conservatively; this can be raised after the HTTPS setup is proven stable.
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '3600'))
+
+if PRODUCTION:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -200,6 +209,8 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_USE_FINDERS = True
+# Compatibility for django-cloudinary-storage's collectstatic command on Django 5.
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

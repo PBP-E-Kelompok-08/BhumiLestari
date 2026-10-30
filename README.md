@@ -89,3 +89,15 @@ Berikut adalah beberapa link chatnya:
 </div>
 
 ### Sultan Noor Dafiq
+<div align = "justify">
+AI yang saya gunakan adalah OpenAI Codex. Saya menggunakannya sebagai rekan diskusi dan pendamping teknis selama mengembangkan Mock API, modul Ulasan Toko, integrasi antarmodul, deployment ke PWS, dan pengujian aplikasi. AI membantu saya menelusuri alur kode, mencari penyebab bug, membandingkan beberapa alternatif solusi, memeriksa konfigurasi keamanan, serta menyusun dan menjalankan unit test. Saya juga menggunakannya untuk memeriksa kesesuaian data Mock API dengan repository utama dan memahami alur checkout lintas toko karena alur tersebut berhubungan langsung dengan hak pembeli untuk memberikan ulasan.
+
+Strategi prompt yang saya gunakan adalah memberikan konteks masalah, output terminal, hasil pengujian, dan tujuan yang ingin dicapai secara bertahap. Saya tidak langsung menyalin jawaban AI, tetapi membaca diff dan menelusuri hubungan antara model, view, service, template, serta test terlebih dahulu. Ketika belum memahami suatu bagian, saya meminta penjelasan mengenai alasan dan dampak dari perubahan tersebut. Saya juga menjalankan perintahnya sendiri, membaca error yang muncul, dan memperbaiki solusi bersama AI sampai hasilnya dapat saya jelaskan kembali.
+
+Setiap solusi saya verifikasi melalui unit test, Django system check, pemeriksaan migrasi, dan pengujian langsung pada deployment PWS. Sepanjang proses tersebut, saya bersungguh-sungguh memahami autentikasi API, pengelolaan secret melalui environment variable, pemisahan pesanan berdasarkan toko, pembatasan ulasan berdasarkan transaksi yang selesai, agregasi statistik menggunakan Django ORM, migrasi data, serta pengelolaan static dan media files di lingkungan produksi. Bagi saya, AI berperan sebagai pendamping belajar dan alat untuk memperluas sudut pandang, bukan sebagai pengganti proses berpikir. Keputusan mengenai implementasi, merge, dan deployment tetap saya ambil setelah memahami serta menguji dampaknya terhadap modul saya maupun modul anggota lain.
+
+Berikut adalah link percakapan AI yang mendokumentasikan proses diskusi, implementasi, debugging, pengujian, dan deployment yang saya lakukan:
+<ul>
+<li>https://chatgpt.com/s/cx_6ae4a43362888191ae7bde88fbadb103</li>
+</ul>
+</div>
