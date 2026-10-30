@@ -17,21 +17,7 @@ def validasi_logo(f):
     if f.size > MAX_LOGO_SIZE:
         raise ValidationError("Ukuran logo maksimal 2 MB")
 
-def clean_account_number(self):
-    number = self.cleaned_data['account_number'].strip()
-    if not number.isdigit():
-        raise ValidationError('Nomor hanya boleh berisi angka.')
-    if not 8 <= len(number) <= 20:
-        raise ValidationError('Nomor harus 8 sampai 20 digit.')
-    return number
 
-def clean(self):
-    cleaned = super().clean()
-    tipe = cleaned.get('method_type')
-    provider = cleaned.get('provider')
-    if tipe and provider and provider not in PROVIDERS[tipe]:
-        self.add_error('provider', 'Provider tidak sesuai dengan tipe yg dipilih.')
-    return cleaned
 
 class LogoForm(forms.Form):
     logo = forms.ImageField(
@@ -51,5 +37,21 @@ class PaymentForm(forms.ModelForm):
     class Meta:
         model = PaymentMethod
         fields =['method_type', 'provider', 'account_number']
+
+    def clean_account_number(self):
+        number = self.cleaned_data['account_number'].strip()
+        if not number.isdigit():
+            raise ValidationError('Nomor hanya boleh berisi angka.')
+        if not 8 <= len(number) <= 20:
+            raise ValidationError('Nomor harus 8 sampai 20 digit.')
+        return number
+
+    def clean(self):
+        cleaned = super().clean()
+        tipe = cleaned.get('method_type')
+        provider = cleaned.get('provider')
+        if tipe and provider and provider not in PROVIDERS[tipe]:
+            self.add_error('provider', 'Provider tidak sesuai dengan tipe yang dipilih.')
+        return cleaned
 
 

@@ -18,6 +18,8 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.core.cache import cache
+from django.core.files.storage import default_storage
+from django.db.models import ProtectedError
 import logging
 import secrets
 import hashlib
@@ -34,8 +36,8 @@ email_validator = EmailValidator()
 MAX_PAYMENT_METHODS = 5
 MAX_OTP_ATTEMPTS = 5
 MAX_LOGIN_ATTEMPTS = 5
-LOGIN_WINDOW_SECOND = 15 * 60
-LOGIN_LOCKOUT_SECOND = 5 * 60
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_LOCKOUT_SECONDS = 5 * 60
 
 # API AJAX untuk kirim OTP
 @require_POST
@@ -210,7 +212,7 @@ def register_view(request):
 
 # View Login
 def login_view(request):
-    next_url = request.POST.get('next') or request.GET.get('next')
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
     if request.method == 'POST':
         email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
@@ -223,16 +225,16 @@ def login_view(request):
         key = _login_key(request, email)
 
         if cache.get(key, 0) >= MAX_LOGIN_ATTEMPTS:
-            messages.error(request, f'Terlalu banyak percobaan login. Coba lagi dalam {LOGIN_LOCKOUT_SECOND // 60} menit')
+            messages.error(request, f'Terlalu banyak percobaan login. Coba lagi dalam {LOGIN_LOCKOUT_SECONDS // 60} menit')
             return redirect(login_url)
 
         user_obj = User.objects.filter(email__iexact=email).first()
         user = authenticate(request, username=user_obj.email, password=password) if user_obj else None
         if user is None:
-            cache.add(key, 0, LOGIN_WINDOW_SECOND)
+            cache.add(key, 0, LOGIN_WINDOW_SECONDS)
             attempts = cache.incr(key)
             if attempts >= MAX_LOGIN_ATTEMPTS:
-                cache.set(key, attempts, LOGIN_LOCKOUT_SECOND)
+                cache.set(key, attempts, LOGIN_LOCKOUT_SECONDS)
             messages.error(request, "Email atau password salah!")
             return redirect(login_url)
 
@@ -270,24 +272,60 @@ def account_settings(request):
                 return redirect('users:account_settings')
             
             name = request.POST.get('name', '').strip()
-            if is_seller:
-                profile, _ = SellerProfile.objects.get_or_create(
-                    user=user, defaults={'store_name': name or user.username}
-                )
-                if name:
-                    profile.store_name = name
-                    profile.save()
-            else:
-                user.full_name = name
-            user.phone = request.POST.get('phone', '').strip()
-            user.address = request.POST.get('address', '').strip()
+            phone = request.POST.get('phone', '').strip()
+            address = request.POST.get('address', '').strip()
+
+            # Validasi nama
+            max_name = 100 if is_seller else 150
+            if not name:
+                messages.error(request, 'Nama wajib diisi.')
+                return redirect('users:account_settings')
+            if len(name) > max_name:
+                messages.error(request, f'Nama maksimal {max_name} karakter.')
+                return redirect('users:account_settings')
+
+            # Validasi nomor telepon (boleh kosong)
+            if phone:
+                digits = phone[1:] if phone.startswith('+') else phone
+                if not digits.isdigit() or not 8 <= len(digits) <= 15:
+                    messages.error(request, 'Nomor telepon harus 8 sampai 15 digit angka (boleh diawali +).')
+                    return redirect('users:account_settings')
+
+            # Validasi alamat
+            if len(address) > 500:
+                messages.error(request, 'Alamat maksimal 500 karakter.')
+                return redirect('users:account_settings')
+            
+            # Cek nama toko kembar (abaikan toko milik user ini sendiri)
+            if is_seller and SellerProfile.objects.filter(store_name__iexact=name).exclude(user=user).exists():
+                messages.error(request, 'Nama toko sudah dipakai, silahkan pilih nama lain.')
+                return redirect('users:account_settings')
 
             new_logo = logo_form.cleaned_data['logo']
-            if new_logo:
-                if user.logo:
-                    user.logo.delete(save=False)
-                user.logo = new_logo
-            user.save()
+            old_logo_name = None
+
+            with transaction.atomic():
+                if is_seller:
+                    profile, _ = SellerProfile.objects.get_or_create(
+                        user=user, defaults={'store_name': name}
+                    )
+                    profile.store_name = name
+                    profile.save()
+                else:
+                    user.full_name = name
+
+                user.phone = phone
+                user.address = address
+
+                if new_logo:
+                    old_logo_name = user.logo.name if user.logo else None
+                    user.logo = new_logo
+                user.save()
+
+            # Hapus file logo lama SETELAH semua berhasil tersimpan
+            if old_logo_name:
+                default_storage.delete(old_logo_name)
+
             messages.success(request, 'Perubahan berhasil disimpan.')
 
         elif action == 'password':
@@ -322,14 +360,19 @@ def account_settings(request):
                     messages.success(request, 'Metode pembayaran ditambahkan')
                 else:
                     for errors in form.errors.values():
-                        for error in error:
+                        for error in errors:
                             messages.error(request, error)
 
         elif action == 'delete_payment':
-            PaymentMethod.objects.filter(
-                id=request.POST.get('payment_id'), user=user
-            ).delete()
-            messages.success(request, 'Metode pembayaran dihapus.')
+            payment_id = request.POST.get('payment_id', '')
+            if not (payment_id.isascii() and payment_id.isdigit() and len(payment_id) <= 18):
+                messages.error(request, 'Metode pembayaran tidak valid.')
+            else:
+                deleted, _ = PaymentMethod.objects.filter(id=int(payment_id), user=user).delete()
+                if deleted:
+                    messages.success(request, 'Metode pembayaran dihapus.')
+                else:
+                    messages.error(request, 'Metode pembayaran tidak ditemukan.')
 
         elif action == 'delete_account':
             password = request.POST.get('password', '')
@@ -338,10 +381,17 @@ def account_settings(request):
             elif user.is_superuser:
                 messages.error(request, 'Akun admin tidak dapat dihapus dari sini.')
             else:
-                if user.logo:
-                    user.logo.delete(save=False)   # hapus file logo dari storage
+                logo_name = user.logo.name if user.logo else None
+                try:
+                    with transaction.atomic():
+                        user.delete()   # SellerProfile & PaymentMethod ikut terhapus (CASCADE)
+                except ProtectedError:
+                    messages.error(request, 'Akun tidak bisa dihapus karena masih punya data terkait.')
+                    return redirect('users:account_settings')
+
+                if logo_name:
+                    default_storage.delete(logo_name)
                 logout(request)
-                user.delete()                       # SellerProfile & PaymentMethod ikut terhapus (CASCADE)
                 messages.success(request, 'Akun Anda berhasil dihapus.')
                 return redirect('dashboard:show_dashboard_home')
 
