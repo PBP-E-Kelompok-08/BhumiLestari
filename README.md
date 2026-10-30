@@ -62,6 +62,15 @@ https://share.gemini.google/UbXVTgv68vdl
 </div>
 
 ### Athifah Mufidah
+<div align = "justify">
+Saya menggunakan AI Claude (Free Plan) untuk membantu mengerjakan modul Keranjang & Checkout, yang mencakup keranjang (tambah, ubah jumlah, centang, hapus), halaman checkout dengan pop up alamat dan pembuatan pesanan (Order dan OrderItem, pengurangan stok), daftar dan detail pesanan sesuai role buyer dan seller, penautan menu keranjang di sidebar, serta unit testing untuk modul tersebut. Selain itu, saya memanfaatkan AI sebagai rekan diskusi untuk merancang alur dan struktur model, mendiagnosis error (migrasi, konflik merge, NoReverseMatch, dan lain-lain), serta memahami bagaimana alur Git bekerja.
+  
+Strategi yang saya gunakan adalah memanfaatkan AI secara interaktif berdasarkan kendala di repositori, khususnya saat melakukan penelusuran kode (debugging) dan membaca  log output terminal. Seluruh saran implementasi dari AI tidak diambil mentah-mentah, melainkan melalui tahap validasi dan pengujian mandiri terlebih dahulu melalui simulasi manual di browser inspeksi, maupun unit testing. Dengan ini, saya bisa mengidentifikasi sekaligus mengoreksi beberapa kekeliruan logika yang dihasilkan AI.
+Berikut link dokumentasi ai yang saya gunakan:
+<ul>
+<li>https://drive.google.com/drive/folders/1A0bhQwbw0WVNuJOGtikYDmBd3zVRV2qb?usp=drive_link</li>
+</ul>
+</div>
 
 ### Nurfadhil Kurniawan
 <div align = "justify">
