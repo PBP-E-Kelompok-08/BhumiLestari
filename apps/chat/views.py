@@ -173,9 +173,19 @@ def _transfer_to_direct_session(ai_session, reason=ChatSession.HANDOVER_MANUAL, 
             handover_reason=reason,
         )
     else:
+        # Sesi direct yang dipakai ulang harus benar-benar terbuka kembali untuk kedua pihak.
+        # Tanpa reset arsip penjual, handover baru bisa tidak terlihat di inbox penjual.
         direct_session.status = ChatSession.STATUS_ACTIVE
         direct_session.is_archived_by_buyer = False
-        direct_session.save(update_fields=["status", "is_archived_by_buyer", "updated_at"])
+        direct_session.is_archived_by_seller = False
+        direct_session.save(
+            update_fields=[
+                "status",
+                "is_archived_by_buyer",
+                "is_archived_by_seller",
+                "updated_at",
+            ]
+        )
 
     for p_ctx in ai_session.product_contexts.all():
         SessionProductContext.objects.get_or_create(
@@ -704,8 +714,8 @@ def send_ai_message_api(request, session_id):
     Alur:
     1. Validasi sesi bertipe `TYPE_AI` dan pengirim adalah pembeli sesi ini.
     2. Simpan pesan pembeli ke database (`ChatMessage`).
-    3. Cek jam operasional toko (`_is_store_open`):
-       Jika toko tutup dan auto reply aktif, balas dengan `closed_message`.
+    3. Jika auto reply bot dimatikan penjual, sesi langsung dialihkan ke penjual.
+       Jika toko tutup, balas dengan `closed_message`.
     4. Ambil basis pengetahuan Q&A (`ProductKnowledge`) dan katalog produk aktif penjual (`Product`).
     5. Susun system prompt (`build_system_prompt`) serta riwayat percakapan terakhir (sliding window 8 pesan).
     6. Hubungi API OpenRouter (`query_openrouter`).
@@ -731,6 +741,9 @@ def send_ai_message_api(request, session_id):
     if session.session_type != ChatSession.TYPE_AI:
         return _json_error("Sesi ini bukan sesi AI. Gunakan endpoint direct-send.", status=400)
 
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi AI ini sudah selesai dan tidak dapat menerima pesan baru.", status=400)
+
     try:
         data = json.loads(request.body.decode("utf-8")) if request.body else {}
     except json.JSONDecodeError:
@@ -752,7 +765,21 @@ def send_ai_message_api(request, session_id):
     store_name = _get_seller_store_name(session.seller)
     bot_name = chat_settings.bot_name
 
-    if chat_settings.is_auto_reply_enabled and not _is_store_open(chat_settings):
+    # Bot auto reply dimatikan penjual: jangan panggil AI, langsung teruskan ke penjual.
+    if not chat_settings.is_auto_reply_enabled:
+        direct_session = _transfer_to_direct_session(
+            session,
+            reason=ChatSession.HANDOVER_BOT_DISABLED,
+            forward_question=content,
+        )
+        return JsonResponse({
+            "status": "success",
+            "handover": True,
+            "direct_session_id": str(direct_session.id),
+            "reply": "Bot otomatis toko sedang dinonaktifkan. Pertanyaan Anda telah diteruskan ke penjual.",
+        })
+
+    if not _is_store_open(chat_settings):
         closed_reply = f"{chat_settings.closed_message}\n\n-{bot_name}"
         ai_msg = ChatMessage.objects.create(
             session=session,
@@ -760,6 +787,7 @@ def send_ai_message_api(request, session_id):
             sender_type=ChatMessage.SENDER_AI,
             content=closed_reply,
         )
+        session.save(update_fields=["updated_at"])
         return JsonResponse({
             "status": "success",
             "handover": False,
@@ -854,6 +882,8 @@ def send_ai_message_api(request, session_id):
         sender_type=ChatMessage.SENDER_AI,
         content=cleaned_reply,
     )
+    # Pesan AI tetap harus menggeser urutan sesi di inbox pembeli.
+    session.save(update_fields=["updated_at"])
 
     return JsonResponse({
         "status": "success",
@@ -894,6 +924,9 @@ def escalate_to_seller_api(request, session_id):
 
     if session.session_type != ChatSession.TYPE_AI:
         return _json_error("Sesi ini sudah bukan sesi AI.")
+
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi AI ini sudah selesai dan tidak dapat dialihkan lagi.", status=400)
 
     direct_session = _transfer_to_direct_session(
         session,
@@ -938,6 +971,9 @@ def switch_to_ai_session_api(request, session_id):
 
     if session.session_type != ChatSession.TYPE_DIRECT:
         return _json_error("Sesi ini sudah merupakan sesi asisten AI.", status=400)
+
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi obrolan langsung ini sudah selesai.", status=400)
 
     ai_session = _transfer_to_ai_session(session)
 
@@ -1077,6 +1113,9 @@ def send_direct_message_api(request, session_id):
 
     if session.session_type != ChatSession.TYPE_DIRECT:
         return _json_error("Endpoint ini hanya untuk sesi obrolan langsung (direct).", status=400)
+
+    if session.status != ChatSession.STATUS_ACTIVE:
+        return _json_error("Sesi obrolan ini sudah selesai dan tidak dapat menerima pesan baru.", status=400)
 
     try:
         data = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -1263,9 +1302,10 @@ def seller_inbox_sessions_api(request):
     Endpoint: `/chat/api/inbox/seller/?tab=<tab>&search=<search>`
 
     Filter Tab:
-    - `semua`: Seluruh sesi obrolan direct pembeli aktif.
+    - `semua`: Seluruh sesi obrolan direct pembeli aktif yang tidak diarsipkan.
     - `belum_dibaca`: Sesi yang memiliki pesan pembeli berstatus `is_read=False`.
     - `belum_dibalas`: Sesi di mana pesan terakhir dikirimkan oleh pembeli (belum ada balasan dari seller).
+    - `diarsipkan`: Sesi direct aktif yang telah diarsipkan oleh penjual.
 
     Fitur Utama:
     - Deduplikasi buyer: Setiap pembeli unik hanya muncul 1 kali pada list (sesi paling baru).
@@ -1287,14 +1327,18 @@ def seller_inbox_sessions_api(request):
     sessions_qs = ChatSession.objects.filter(
         seller=seller,
         session_type=ChatSession.TYPE_DIRECT,
-        is_archived_by_seller=False
+        status=ChatSession.STATUS_ACTIVE,
     ).order_by("-updated_at")
 
-    if tab == "belum_dibaca":
-        sessions_qs = sessions_qs.filter(
-            messages__sender_type=ChatMessage.SENDER_BUYER,
-            messages__is_read=False
-        ).distinct()
+    if tab == "diarsipkan":
+        sessions_qs = sessions_qs.filter(is_archived_by_seller=True)
+    else:
+        sessions_qs = sessions_qs.filter(is_archived_by_seller=False)
+        if tab == "belum_dibaca":
+            sessions_qs = sessions_qs.filter(
+                messages__sender_type=ChatMessage.SENDER_BUYER,
+                messages__is_read=False
+            ).distinct()
 
     seen_buyer_ids = set()
     results = []
@@ -1332,6 +1376,7 @@ def seller_inbox_sessions_api(request):
                 "name": buyer_name,
             },
             "unread_count": unread_count,
+            "is_archived": s.is_archived_by_seller,
             "product_contexts": contexts,
             "last_message": {
                 "content": last_msg.content if last_msg else None,

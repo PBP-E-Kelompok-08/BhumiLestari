@@ -59,11 +59,13 @@ class ChatSession(models.Model):
     HANDOVER_NONE = 'none'
     HANDOVER_MANUAL = 'manual_user'
     HANDOVER_UNANSWERED = 'unanswered_by_ai'
+    HANDOVER_BOT_DISABLED = 'bot_disabled'
 
     HANDOVER_REASONS = [
         (HANDOVER_NONE, 'None'),
         (HANDOVER_MANUAL, 'Diminta Pembeli'),
         (HANDOVER_UNANSWERED, 'Jawaban Tidak Ada di Daftar Penjual'),
+        (HANDOVER_BOT_DISABLED, 'Bot Auto Reply Dinonaktifkan'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

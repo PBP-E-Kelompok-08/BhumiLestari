@@ -10,7 +10,8 @@
         pollingTimer: null,
         isSending: false,
         pendingMessages: {},
-        renderedMessages: []
+        renderedMessages: [],
+        sessionsSignature: ""
     };
 
     var els = {};
@@ -43,14 +44,33 @@
      * Mendukung pemfilteran tab (semua, belum_dibaca, arsip) dan query pencarian nama pembeli.
      * @param {boolean} preserveSelection - Jika true, tidak mengubah sesi aktif yang sedang dibuka.
      */
-    async function loadSessions(preserveSelection) {
+    async function loadSessions(preserveSelection, onlyIfChanged) {
         try {
             var url = "/chat/api/seller/sessions/?tab=" + encodeURIComponent(state.currentTab);
             if (state.searchQuery) {
                 url += "&search=" + encodeURIComponent(state.searchQuery);
             }
             var data = await ChatCore.apiFetch(url);
-            state.sessions = data.sessions || [];
+            var sessions = data.sessions || [];
+            var signature = JSON.stringify(sessions.map(function (s) {
+                return [
+                    s.id,
+                    s.status,
+                    s.unread_count,
+                    s.is_archived,
+                    s.updated_at,
+                    s.last_message ? s.last_message.sender_type : null,
+                    s.last_message ? s.last_message.content : null,
+                    s.last_message ? s.last_message.created_at : null
+                ];
+            }));
+
+            // Polling memakai onlyIfChanged agar sidebar tidak di-render ulang tanpa perubahan.
+            if (onlyIfChanged && signature === state.sessionsSignature) {
+                return;
+            }
+            state.sessionsSignature = signature;
+            state.sessions = sessions;
             renderSessionList();
 
             if (!preserveSelection && state.sessions.length > 0 && !state.activeSessionId) {
@@ -59,6 +79,8 @@
                 highlightActiveSessionItem();
             }
         } catch (err) {
+            // Paksa render ulang pada polling berikutnya setelah error sementara.
+            state.sessionsSignature = "";
             if (els.sessionList) {
                 els.sessionList.innerHTML =
                     '<li class="chat-sidebar-empty">Gagal memuat percakapan: ' +
@@ -115,7 +137,11 @@
             html +=
                 '<button type="button" class="chat-archive-item-btn js-archive-session" data-session-id="' +
                 ChatCore.escapeHtml(s.id) +
-                '" title="Arsipkan Percakapan" aria-label="Arsipkan Percakapan">' +
+                '" title="' +
+                (s.is_archived ? "Keluarkan dari Arsip" : "Arsipkan Percakapan") +
+                '" aria-label="' +
+                (s.is_archived ? "Keluarkan dari Arsip" : "Arsipkan Percakapan") +
+                '">' +
                 ChatCore.getArchiveIconSvgHtml() +
                 "</button>" +
                 "</div>" +
@@ -761,6 +787,12 @@
                         }
                     })
                     .catch(function () {});
+
+                // Jaga sidebar tetap sinkron dengan pesan terbaru sesi aktif.
+                loadSessions(true, true);
+            } else if (!state.activeSessionId) {
+                // Tanpa sesi aktif pun, chat baru dari pembeli harus tetap muncul.
+                loadSessions(true, true);
             }
         }, 6000);
     }

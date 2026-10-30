@@ -1,10 +1,10 @@
-# AI DISCLOSURE: Test ini dibuat oleh AI untuk mempermudah memastikan apakah backendnya berjalan dgn baik atau tidak
-
 import json
+from datetime import timedelta
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.chat.models import (
     ProductKnowledge,
@@ -1086,6 +1086,201 @@ class ChatAPITest(TestCase):
         ai_session = ChatSession.objects.get(id=data["session_id"])
         self.assertTrue(ai_session.messages.filter(content="Permisi mau tanya stok sabun.").exists())
         self.assertEqual(ai_session.product_contexts.count(), 1)
+
+    def test_resolved_sessions_reject_new_messages_and_leave_seller_inbox(self):
+        direct_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        ChatMessage.objects.create(
+            session=direct_session,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Halo penjual.",
+            is_read=False,
+        )
+        ai_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+        )
+
+        self.client.login(username="seller@test.com", password="password123")
+        direct_url = reverse("chat:send_direct_message", args=[direct_session.id])
+        inbox_url = reverse("chat:seller_inbox_sessions")
+
+        # Sesi aktif tetap bisa dibalas dan muncul di inbox
+        resp_active = self.client.post(
+            direct_url,
+            data=json.dumps({"content": "Halo juga kak."}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp_active.status_code, 200)
+        self.assertEqual(self.client.get(inbox_url).json()["total_sessions"], 1)
+
+        # Setelah sesi diselesaikan, penjual tidak boleh mengirim pesan lagi
+        ChatSession.objects.filter(id__in=[direct_session.id, ai_session.id]).update(
+            status=ChatSession.STATUS_RESOLVED
+        )
+        resp_resolved = self.client.post(
+            direct_url,
+            data=json.dumps({"content": "Masih di sini kak?"}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp_resolved.status_code, 400)
+
+        # Sesi resolved juga tidak boleh muncul lagi di inbox penjual
+        self.assertEqual(self.client.get(inbox_url).json()["total_sessions"], 0)
+
+        # Endpoint AI juga menolak sesi yang sudah resolved
+        self.client.login(username="buyer@test.com", password="password123")
+        ai_url = reverse("chat:send_ai_message", args=[ai_session.id])
+        resp_ai = self.client.post(
+            ai_url,
+            data=json.dumps({"content": "Halo bot."}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp_ai.status_code, 400)
+        self.assertEqual(ai_session.messages.count(), 0)
+
+    def test_reescalation_reopens_seller_archived_direct_session(self):
+        ai_session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+        )
+
+        # Eskalasi pertama membuat sesi direct
+        self.client.login(username="buyer@test.com", password="password123")
+        esc_resp = self.client.post(reverse("chat:escalate_to_seller", args=[ai_session.id]))
+        self.assertEqual(esc_resp.status_code, 200)
+        direct_id = esc_resp.json()["direct_session_id"]
+
+        # Penjual mengarsipkan sesi direct tersebut
+        self.client.login(username="seller@test.com", password="password123")
+        arc_resp = self.client.post(reverse("chat:toggle_archive_session", args=[direct_id]))
+        self.assertEqual(arc_resp.status_code, 200)
+        self.assertTrue(arc_resp.json()["is_archived"])
+        self.assertEqual(self.client.get(reverse("chat:seller_inbox_sessions")).json()["total_sessions"], 0)
+
+        # Pembeli beralih kembali ke AI, sesi direct menjadi resolved
+        self.client.login(username="buyer@test.com", password="password123")
+        switch_resp = self.client.post(reverse("chat:switch_to_ai_session", args=[direct_id]))
+        self.assertEqual(switch_resp.status_code, 200)
+        ai_id = switch_resp.json()["ai_session_id"]
+
+        # Eskalasi kedua harus membuka kembali sesi direct yang diarsipkan penjual
+        esc2_resp = self.client.post(reverse("chat:escalate_to_seller", args=[ai_id]))
+        self.assertEqual(esc2_resp.status_code, 200)
+
+        direct_session = ChatSession.objects.get(id=direct_id)
+        self.assertEqual(direct_session.status, ChatSession.STATUS_ACTIVE)
+        self.assertFalse(direct_session.is_archived_by_seller)
+        self.assertFalse(direct_session.is_archived_by_buyer)
+
+        # Penjual melihat kembali sesi tersebut dan bisa membalas
+        self.client.login(username="seller@test.com", password="password123")
+        inbox_data = self.client.get(reverse("chat:seller_inbox_sessions")).json()
+        self.assertEqual(inbox_data["total_sessions"], 1)
+        self.assertEqual(inbox_data["sessions"][0]["id"], direct_id)
+
+        reply_resp = self.client.post(
+            reverse("chat:send_direct_message", args=[direct_id]),
+            data=json.dumps({"content": "Halo kak, ada yang bisa dibantu?"}),
+            content_type="application/json"
+        )
+        self.assertEqual(reply_resp.status_code, 200)
+
+    @patch("apps.chat.views.query_openrouter")
+    def test_auto_reply_disabled_hands_over_to_seller(self, mock_ai):
+        settings_obj, _ = SellerChatSettings.objects.get_or_create(seller=self.seller)
+        settings_obj.is_auto_reply_enabled = False
+        settings_obj.save()
+
+        self.client.login(username="buyer@test.com", password="password123")
+        session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+        )
+        url = reverse("chat:send_ai_message", args=[session.id])
+        resp = self.client.post(
+            url,
+            data=json.dumps({"content": "Halo, mau tanya stok."}),
+            content_type="application/json"
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["handover"])
+        mock_ai.assert_not_called()
+
+        direct_session = ChatSession.objects.get(id=data["direct_session_id"])
+        self.assertEqual(direct_session.session_type, ChatSession.TYPE_DIRECT)
+        self.assertEqual(direct_session.status, ChatSession.STATUS_ACTIVE)
+        self.assertEqual(direct_session.handover_reason, ChatSession.HANDOVER_BOT_DISABLED)
+        self.assertTrue(direct_session.messages.filter(
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Halo, mau tanya stok."
+        ).exists())
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, ChatSession.STATUS_RESOLVED)
+
+    @patch("apps.chat.views.query_openrouter")
+    def test_ai_message_updates_session_timestamp(self, mock_ai):
+        mock_ai.return_value = "Stok masih tersedia."
+        self.client.login(username="buyer@test.com", password="password123")
+        session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_AI,
+        )
+        stale_time = timezone.now() - timedelta(days=1)
+        ChatSession.objects.filter(id=session.id).update(updated_at=stale_time)
+
+        resp = self.client.post(
+            reverse("chat:send_ai_message", args=[session.id]),
+            data=json.dumps({"content": "Stok masih ada?"}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        session.refresh_from_db()
+        self.assertGreater(session.updated_at, stale_time)
+
+    def test_seller_inbox_archived_tab(self):
+        session = ChatSession.objects.create(
+            buyer=self.buyer,
+            seller=self.seller,
+            session_type=ChatSession.TYPE_DIRECT,
+        )
+        ChatMessage.objects.create(
+            session=session,
+            sender=self.buyer,
+            sender_type=ChatMessage.SENDER_BUYER,
+            content="Halo kak.",
+            is_read=True,
+        )
+
+        self.client.login(username="seller@test.com", password="password123")
+        inbox_url = reverse("chat:seller_inbox_sessions")
+        archive_url = reverse("chat:toggle_archive_session", args=[session.id])
+
+        self.assertEqual(len(self.client.get(f"{inbox_url}?tab=semua").json()["sessions"]), 1)
+        self.assertEqual(len(self.client.get(f"{inbox_url}?tab=diarsipkan").json()["sessions"]), 0)
+
+        self.client.post(archive_url)
+        self.assertEqual(len(self.client.get(f"{inbox_url}?tab=semua").json()["sessions"]), 0)
+
+        archived_sessions = self.client.get(f"{inbox_url}?tab=diarsipkan").json()["sessions"]
+        self.assertEqual(len(archived_sessions), 1)
+        self.assertTrue(archived_sessions[0]["is_archived"])
+
+        self.client.post(archive_url)
+        self.assertEqual(len(self.client.get(f"{inbox_url}?tab=diarsipkan").json()["sessions"]), 0)
+        self.assertEqual(len(self.client.get(f"{inbox_url}?tab=semua").json()["sessions"]), 1)
 
 
 

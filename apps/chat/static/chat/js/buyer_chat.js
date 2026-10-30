@@ -10,7 +10,8 @@
         pollingTimer: null,
         isSending: false,
         pendingMessages: {},
-        renderedMessages: []
+        renderedMessages: [],
+        sessionsSignature: ""
     };
 
     var els = {};
@@ -44,14 +45,33 @@
      * Mendukung pemfilteran tab (Semua, Belum Dibaca, Arsip) dan query pencarian nama toko.
      * @param {boolean} preserveSelection - Jika true, tidak mengubah sesi aktif yang sedang dibuka.
      */
-    async function loadSessions(preserveSelection) {
+    async function loadSessions(preserveSelection, onlyIfChanged) {
         try {
             var url = "/chat/api/buyer/sessions/?tab=" + encodeURIComponent(state.currentTab);
             if (state.searchQuery) {
                 url += "&search=" + encodeURIComponent(state.searchQuery);
             }
             var data = await ChatCore.apiFetch(url);
-            state.sessions = data.sessions || [];
+            var sessions = data.sessions || [];
+            var signature = JSON.stringify(sessions.map(function (s) {
+                return [
+                    s.id,
+                    s.status,
+                    s.unread_count,
+                    s.is_archived,
+                    s.updated_at,
+                    s.last_message ? s.last_message.sender_type : null,
+                    s.last_message ? s.last_message.content : null,
+                    s.last_message ? s.last_message.created_at : null
+                ];
+            }));
+
+            // Polling memakai onlyIfChanged agar sidebar tidak di-render ulang tanpa perubahan.
+            if (onlyIfChanged && signature === state.sessionsSignature) {
+                return;
+            }
+            state.sessionsSignature = signature;
+            state.sessions = sessions;
             renderSessionList();
 
             if (!preserveSelection && state.sessions.length > 0 && !state.activeSessionId) {
@@ -60,6 +80,8 @@
                 highlightActiveSessionItem();
             }
         } catch (err) {
+            // Paksa render ulang pada polling berikutnya setelah error sementara.
+            state.sessionsSignature = "";
             if (els.sessionList) {
                 els.sessionList.innerHTML =
                     '<li class="chat-sidebar-empty">Gagal memuat percakapan: ' +
@@ -834,9 +856,10 @@
      * @param {string|number} sellerId - ID user penjual tujuan (wajib jika membuat sesi baru)
      * @param {string} [productId] - ID produk (integer/UUID/slug produk)
      * @param {string} [productName] - Nama tampilan produk
+     * @param {boolean} [attachToActive=false] - Lampirkan ke sesi aktif tanpa membuat/mengubah sesi
      * @returns {Promise<void>}
      */
-    async function startOrAttachProduct(sellerId, productId, productName) {
+    async function startOrAttachProduct(sellerId, productId, productName, attachToActive) {
         try {
             var productsPayload = [];
             if (productId) {
@@ -844,6 +867,26 @@
                     product_id: productId,
                     product_name: productName || productId
                 });
+            }
+
+            var activeSeller = state.activeSessionData && state.activeSessionData.seller;
+            var isActiveSeller = activeSeller && String(activeSeller.id) === String(sellerId);
+
+            // Mode "Lampirkan Produk": tambahkan konteks ke sesi yang sedang dibuka.
+            // Jangan panggil endpoint sesi AI, karena endpoint itu mengalihkan direct chat ke bot.
+            if (attachToActive && state.activeSessionId && isActiveSeller) {
+                if (productsPayload.length === 0) {
+                    ChatCore.showToast("Pilih produk yang ingin dilampirkan.");
+                    return;
+                }
+                await ChatCore.apiFetch("/chat/api/sessions/" + state.activeSessionId + "/products/", {
+                    method: "POST",
+                    body: { products: productsPayload }
+                });
+                ChatCore.closeModal("productContextModalBackdrop");
+                await selectSession(state.activeSessionId);
+                ChatCore.showToast("Produk terkait ditambahkan ke percakapan.");
+                return;
             }
 
             if (sellerId) {
@@ -1502,6 +1545,9 @@
             }
         });
 
+        // Mode modal: "new" = mulai chat baru, "attach" = lampirkan produk ke sesi aktif
+        var productModalMode = "new";
+
         // Trigger buka modal produk & toko
         var productModalTriggers = [
             document.getElementById("openNewChatBtn"),
@@ -1515,6 +1561,7 @@
             btn.addEventListener("click", function () {
                 var isAttachToActive = (btn.id === "dropdownAddProductBtn" || btn.id === "addContextInlineBtn") &&
                                        state.activeSessionData && state.activeSessionData.seller;
+                productModalMode = isAttachToActive ? "attach" : "new";
 
                 if (isAttachToActive) {
                     var s = state.activeSessionData.seller;
@@ -1551,7 +1598,7 @@
                     ChatCore.showToast("Silakan pilih toko penjual terlebih dahulu.");
                     return;
                 }
-                startOrAttachProduct(sellerId, productId, productName);
+                startOrAttachProduct(sellerId, productId, productName, productModalMode === "attach");
             });
         }
 
@@ -1613,6 +1660,12 @@
                         }
                     })
                     .catch(function () {});
+
+                // Jaga sidebar tetap sinkron dengan pesan terbaru sesi aktif.
+                loadSessions(true, true);
+            } else if (!state.activeSessionId) {
+                // Tanpa sesi aktif pun, percakapan baru harus tetap muncul.
+                loadSessions(true, true);
             }
         }, 6000);
     }
