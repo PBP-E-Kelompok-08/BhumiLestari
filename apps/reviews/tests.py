@@ -144,7 +144,7 @@ class ServiceLaporanTest(DasarTest):
         hasil = laporan_ulasan("seller", toko=self.toko, periode="bulanan")
         self.assertEqual(hasil["judul_tabel"], "Rating per Produk")
         self.assertEqual([b["nama"] for b in hasil["baris"]], ["Sedotan Bambu"])
-        self.assertEqual(hasil["kartu"][0]["nilai"], "5,0 / 5")
+        self.assertEqual(hasil["kartu"][0]["nilai"], "5,0 / 5,0")
         self.assertEqual(hasil["kartu"][1]["nilai"], 1)
 
     def test_periode_mingguan_vs_bulanan(self):
@@ -218,7 +218,7 @@ class ViewDashboardTest(DasarTest):
         buat_ulasan(self.toko, self.b2, self.produk, 3)
         self.client.force_login(self.seller_user)
         r = self.client.get(reverse("dashboard:seller_summary"))
-        self.assertContains(r, "4,0/5")
+        self.assertContains(r, "4,0/5,0")
         self.assertContains(r, "2 ulasan")
         self.assertNotContains(r, "1510 ulasan")
 
