@@ -1,8 +1,30 @@
 from django import forms
-from .models import Product
+from .models import EcoFeature, Product
 from .validators import validate_file_size, validate_file_extension, validate_file_content
 
+FITUR_LABEL = {
+    "100% Biodegradable": "100% Mudah Terurai",
+    "Recycled Materials": "Bahan Daur Ulang",
+    "Zero Plastic Packaging": "Kemasan Bebas Plastik",
+    "Cruelty Free": "Tanpa Uji Coba pada Hewan",
+    "Locally Sourced": "Bahan Lokal",
+    "Carbon Neutral": "Netral Karbon",
+    "Reusable & Refillable": "Dapat Digunakan dan Diisi Ulang",
+    "Chemical Free": "Bebas Bahan Kimia Berbahaya",
+}
+
+
+class EcoFeatureChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, obj):
+        return FITUR_LABEL.get(obj.name, obj.name)
+
+
 class ProductForm(forms.ModelForm):
+    eco_features = EcoFeatureChoiceField(
+        queryset=EcoFeature.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        label="Fitur Ramah Lingkungan",
+    )
     class Meta:
         model = Product
         fields = [
@@ -21,7 +43,7 @@ class ProductForm(forms.ModelForm):
             "stock": "Stok",
             "discount": "Diskon (Opsional)",
             "image": "Foto Produk",
-            "verification_document": "Sertifikasi Eco-Friendly Produk",
+            "verification_document": "Dokumen Verifikasi Ramah Lingkungan",
         }
 
         widgets = {

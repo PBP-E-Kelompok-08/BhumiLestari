@@ -1,6 +1,7 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.db import transaction
 from django.db.models import Sum
 from django.http import JsonResponse
@@ -187,7 +188,7 @@ def delete_cart_items(request):
 # Checkout
 
 def _create_order(user, recipient, phone, address, shipping_key, payment_key):
-    """Buat Order + OrderItem, kurangi stok, hapus item terpilih. Raise ValueError kalau gagal."""
+    """Buat satu pesanan per toko dalam satu transaksi checkout."""
     with transaction.atomic():
         cart = Cart.objects.get(user=user)
         items = list(cart.items.filter(is_selected=True))
@@ -201,41 +202,38 @@ def _create_order(user, recipient, phone, address, shipping_key, payment_key):
             )
         }
 
-        items_total = 0
+        by_seller = {}
         for ci in items:
             p = products[ci.product_id]
             if p.status != "verified":
                 raise ValueError(f"{p.name} sudah tidak tersedia.")
             if ci.quantity > p.stock:
                 raise ValueError(f"Stok {p.name} tidak mencukupi (sisa {p.stock}).")
-            items_total += int(p.final_price) * ci.quantity
+            by_seller.setdefault(p.seller_id, []).append(ci)
 
         shipping_cost = SHIPPING[shipping_key][1]
-        order = Order.objects.create(
-            buyer=user,
-            recipient_name=recipient,
-            phone=phone,
-            shipping_address=address,
-            shipping_method=shipping_key,
-            payment_method=payment_key,
-            shipping_cost=shipping_cost,
-            total_price=items_total + shipping_cost,
-        )
-
-        for ci in items:
-            p = products[ci.product_id]
-            OrderItem.objects.create(
-                order=order,
-                product=p,
-                product_name=p.name,
-                price=int(p.final_price),
-                quantity=ci.quantity,
+        orders = []
+        for seller_id, seller_items in by_seller.items():
+            seller = products[seller_items[0].product_id].seller
+            subtotal = sum(int(products[ci.product_id].final_price) * ci.quantity for ci in seller_items)
+            order = Order.objects.create(
+                buyer=user, seller=seller, store_name=seller.store_name,
+                recipient_name=recipient, phone=phone, shipping_address=address,
+                shipping_method=shipping_key, payment_method=payment_key,
+                shipping_cost=shipping_cost, total_price=subtotal + shipping_cost,
             )
-            p.stock -= ci.quantity
-            p.save(update_fields=["stock"])
+            orders.append(order)
+            for ci in seller_items:
+                p = products[ci.product_id]
+                OrderItem.objects.create(
+                    order=order, product=p, product_name=p.name,
+                    price=int(p.final_price), quantity=ci.quantity,
+                )
+                p.stock -= ci.quantity
+                p.save(update_fields=["stock"])
 
         cart.items.filter(pk__in=[ci.pk for ci in items]).delete()
-    return order
+    return orders
 
 
 @login_required(login_url="users:login")
@@ -250,6 +248,7 @@ def show_checkout(request):
 
     items_total = sum(int(ci.product.final_price) * ci.quantity for ci in items)
     item_count = sum(ci.quantity for ci in items)
+    store_count = len({ci.product.seller_id for ci in items})
 
     user = request.user
     form = {
@@ -289,7 +288,7 @@ def show_checkout(request):
         if form["payment_method"] not in PAYMENT:
             form["payment_method"] = "cod"
 
-    shipping_cost = SHIPPING[form["shipping_method"]][1]
+    shipping_cost = SHIPPING[form["shipping_method"]][1] * store_count
     context = {
         "form": form,
         "error": error,
@@ -299,6 +298,7 @@ def show_checkout(request):
         "payment_options": [{"key": k, "label": v} for k, v in PAYMENT.items()],
         "items_total": items_total,
         "item_count": item_count,
+        "store_count": store_count,
         "shipping_cost": shipping_cost,
         "grand_total": items_total + shipping_cost,
     }
@@ -331,6 +331,13 @@ def _visible_items(order, user):
     if getattr(user, "role", None) == "seller":
         items = [i for i in items if i.product and i.product.seller.user_id == user.id]
     return items
+
+
+def _mixed_legacy_order(order):
+    """Pesanan lama tanpa toko tunggal tidak boleh diubah statusnya bersama-sama."""
+    return order.seller_id is None and len({
+        item.product.seller_id for item in order.items.all() if item.product
+    }) > 1
 
 
 @login_required(login_url="users:login")
@@ -390,6 +397,9 @@ def order_detail(request, order_id):
 
     if request.method == "POST":
         aksi = request.POST.get("aksi")
+        if aksi in {"terima", "selesai"} and _mixed_legacy_order(order):
+            messages.error(request, "Pesanan lama ini berisi beberapa toko. Statusnya perlu dipisahkan oleh admin.")
+            return redirect("checkout:order_detail", order_id=order.pk)
         if is_seller and aksi == "terima" and order.status == "diproses":
             order.status = "dikirim"
             order.save(update_fields=["status"])
