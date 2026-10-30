@@ -97,8 +97,6 @@
 #delete-modal .cc-modal-confirm:hover { background: #b71c1c; border-color: #b71c1c; } 
 .cc-modal-actions .cc-modal-cancel { border-color: #d32f2f; color: #d32f2f; }
 
-
-
 /* Checkout */
 .checkout-form { max-width: 760px; margin: 0 auto; }
 .co-row-between { display: flex; justify-content: space-between; }
@@ -128,4 +126,36 @@
     width: min(560px, 92vw);
     box-sizing: border-box;
     padding: 28px 32px;
+}
+
+/* Responsif */
+@media (max-width: 900px) {
+    .cc-page { padding: 24px 24px 48px; }
+    .cart-layout { flex-direction: column; align-items: stretch; gap: 16px; }
+    .cart-list, .cart-summary { flex: 0 0 auto; width: 100%; }
+}
+
+@media (max-width: 600px) {
+    .cc-page { padding: 20px 12px 40px; }
+    .cc-title { font-size: 1.7rem; padding-left: 0; margin-bottom: 16px; }
+    .cc-card { padding: 16px; }
+
+    /* Keranjang */
+    .cart-item { flex-wrap: wrap; gap: 12px; }
+    .cart-item-img { width: 56px; height: 56px; }
+    .cart-item-info { flex: 1 1 0; min-width: 0; }
+    .cart-item-right {
+        flex: 1 0 100%;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .cart-item-price { margin: 0; }
+
+    /* Checkout */
+    .pill-row { gap: 12px; }
+    .pill-grid { grid-template-columns: 1fr; gap: 10px; }
+    .pill label { padding: 8px 16px; }
+
+    /* Popup */
+    .cc-modal-box { width: 92vw; padding: 20px; max-height: 90vh; overflow-y: auto; }
+    #addr-modal .cc-modal-box { padding: 20px; }
 }
