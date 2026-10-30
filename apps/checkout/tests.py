@@ -1,5 +1,7 @@
 import json
+from importlib import import_module
 
+from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -68,6 +70,44 @@ class MultiSellerCheckoutTests(TestCase):
         self.client.post(reverse("checkout:order_detail", args=[legacy.pk]), {"aksi": "selesai"})
         legacy.refresh_from_db()
         self.assertEqual(legacy.status, "dikirim")
+
+    def test_migrasi_memisahkan_pesanan_lama_per_toko(self):
+        legacy = Order.objects.create(
+            buyer=self.buyer,
+            recipient_name="Pembeli",
+            phone="08123456789",
+            shipping_address="Bandung",
+            status="selesai",
+            shipping_cost=7000,
+            total_price=27000,
+        )
+        for product in self.products:
+            OrderItem.objects.create(
+                order=legacy,
+                product=product,
+                product_name=product.name,
+                price=10000,
+                quantity=1,
+            )
+
+        migration = import_module(
+            "apps.checkout.migrations.0002_split_legacy_mixed_orders"
+        )
+        migration.split_legacy_mixed_orders(django_apps, None)
+
+        orders = list(Order.objects.filter(buyer=self.buyer).order_by("seller_id"))
+        self.assertEqual(len(orders), 2)
+        self.assertEqual({order.seller_id for order in orders}, {p.seller_id for p in self.products})
+        self.assertTrue(all(order.items.count() == 1 for order in orders))
+        self.assertTrue(all(order.status == "selesai" for order in orders))
+        self.assertEqual(sum(order.total_price for order in orders), 27000)
+        self.assertEqual(sum(order.shipping_cost for order in orders), 7000)
+        self.assertTrue(all(pernah_membeli(self.buyer, product.pk) for product in self.products))
+
+        self.client.force_login(self.buyer)
+        response = self.client.get(reverse("checkout:order_list"))
+        self.assertEqual(len(response.context["rows"]), 2)
+        self.assertEqual({row["party"] for row in response.context["rows"]}, {"Toko 1", "Toko 2"})
 
 
 # AI Assistance Disclosure:
