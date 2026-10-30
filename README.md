@@ -89,3 +89,10 @@ Berikut adalah beberapa link chatnya:
 </div>
 
 ### Sultan Noor Dafiq
+<div align = "justify">
+Saya menggunakan OpenAI Codex sebagai rekan diskusi dan pendamping teknis selama mengembangkan Mock API, modul Ulasan Toko, integrasi antarmodul, deployment ke PWS, serta pengujian aplikasi secara menyeluruh. AI membantu saya menelusuri alur kode, mencari penyebab bug, menyusun alternatif solusi, memeriksa konfigurasi keamanan, dan mengembangkan unit test. Saya juga menggunakannya untuk memeriksa kesesuaian data Mock API dengan repository utama dan memahami alur checkout lintas toko karena alur tersebut berhubungan langsung dengan validitas ulasan pembeli.
+
+Strategi saya bukan sekadar meminta dan menyalin kode jadi. Saya menjelaskan kondisi yang terjadi dan tujuan yang ingin dicapai, kemudian membaca setiap perubahan, menelusuri hubungan antara model, view, service, template, dan test, serta meminta penjelasan ketika ada bagian yang belum saya pahami. Setiap solusi dari AI saya verifikasi kembali melalui unit test, Django system check, pemeriksaan migrasi, dan pengujian langsung pada deployment PWS. Keputusan mengenai kode yang digunakan, proses merge, dan deployment tetap saya ambil setelah memahami dampaknya terhadap modul saya maupun modul anggota lain.
+
+Sepanjang proses ini, saya bersungguh-sungguh memahami konsep yang terlibat, khususnya autentikasi API, pengelolaan secret melalui environment variable, relasi pesanan per toko, pembatasan hak ulasan berdasarkan transaksi yang selesai, agregasi statistik dengan Django ORM, migrasi data, serta pengelolaan static dan media files di lingkungan produksi. Bagi saya, AI berperan sebagai pendamping belajar dan alat untuk memperluas sudut pandang, bukan sebagai pengganti proses berpikir dan pemahaman. Seluruh implementasi akhir tetap saya tinjau, uji, dan pertanggungjawabkan sendiri.
+</div>
