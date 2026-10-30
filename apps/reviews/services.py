@@ -95,7 +95,7 @@ def laporan_ulasan(role, toko=None, periode=None):
     dalam_periode = dasar.filter(created_at__gte=sejak)
 
     agg = dalam_periode.aggregate(rata=Avg("rating"), total=Count("id"))
-    rata_teks = format_rata(agg["rata"]) + " / 5" if agg["total"] else "-"
+    rata_teks = format_rata(agg["rata"]) + " / 5,0" if agg["total"] else "-"
 
     if role == "seller":
         perlu = dasar.filter(balasan__isnull=True).count()
