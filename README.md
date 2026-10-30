@@ -65,8 +65,8 @@ Dalam prosesnya, saya tetap berusaha mengimplementasikan setiap perbaikan secara
 Perlu digarisbawahi bahwa AI hanya berperan sebagai alat bantu dalam proses belajar dan pengembangan. Seluruh keputusan terkait solusi yang digunakan dan implementasi akhir tetap berada di tangan saya sepenuhnya.
 Berikut adalah beberapa link Claude yg saya gunakan:
 <ul>
-<li>https://claude.ai/chat/cac13c32-fa2f-49b9-8f72-4e0c4d98275b</li>
-<li>https://claude.ai/chat/a98a9b06-db02-4f81-91a3-f17e96b105e4</li>
+<li>https://claude.ai/share/e22275f6-35e4-477b-8004-6de52e3428c1</li>
+<li>https://claude.ai/share/6df6be04-f70c-4378-beca-70341a82ea97</li>
 </ul>
 </div>
 
