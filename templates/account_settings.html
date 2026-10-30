@@ -38,7 +38,7 @@
 
                 <dt>Nomor Telepon</dt>
                 <dd>
-                    {% if user.phone %}{{ user.phone }}
+                    {% if user.phone %}{{ masked_phone }}
                     {% else %}<span class="empty-note">Belum ada nomor telepon. Harap isi nomor telepon Anda.</span>{% endif %}
                 </dd>
 
@@ -166,11 +166,16 @@
             <select id="method_type" name="method_type" required>
                 <option value="bank">Bank</option>
                 <option value="ewallet">E-Wallet</option>
-                <option value="qris">QRIS</option>
             </select>
 
             <label for="provider">Nama Bank / E-Wallet</label>
-            <input type="text" id="provider" name="provider" placeholder="BCA / GoPay / dst." required>
+            <select id="provider" name="provider" required>
+                {% for tipe, daftar in providers.items %}     
+                    {% for p in daftar %}
+                        <option value="{{ p }}" data-type="{{ tipe }}">{{ p }}</option>
+                        {% endfor %}
+                {% endfor %}
+            </select>
 
             <label for="account_number">Nomor Rekening / HP</label>
             <input type="text" id="account_number" name="account_number" required>
@@ -209,33 +214,57 @@
 </dialog>
 
 <script>
-// Buka modal
-document.querySelectorAll('[data-open]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        document.getElementById(btn.dataset.open).showModal();
+    // Buka modal
+    document.querySelectorAll('[data-open]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.getElementById(btn.dataset.open).showModal();
+        });
     });
-});
-// Tutup modal lewat tombol Batal
-document.querySelectorAll('[data-close]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        btn.closest('dialog').close();
+    // Tutup modal lewat tombol Batal
+    document.querySelectorAll('[data-close]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            btn.closest('dialog').close();
+        });
     });
-});
-// Tutup modal kalau klik area gelap di luar kotak
-document.querySelectorAll('dialog.modal').forEach(function (d) {
-    d.addEventListener('click', function (e) {
-        if (e.target === d) d.close();
+    // Tutup modal kalau klik area gelap di luar kotak
+    document.querySelectorAll('dialog.modal').forEach(function (d) {
+        d.addEventListener('click', function (e) {
+            if (e.target === d) d.close();
+        });
     });
-});
-// Preview logo
-document.getElementById('logo').addEventListener('change', function () {
-    var file = this.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function (e) {
-        document.getElementById('logo-preview').src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-});
+    // Preview logo
+    document.getElementById('logo').addEventListener('change', function () {
+        var file = this.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            document.getElementById('logo-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+    // Change Method Payment
+    const methodType = document.getElementById('method_type');
+    const provider = document.getElementById('provider');
+
+    function filterProvider () {
+        const tipe = methodType.value;
+        let pertama = null;
+
+        for (const opt of provider.options){
+            const cocok = opt.dataset.type === tipe;
+            opt.hidden = !cocok
+            opt.disable = !cocok
+            if (cocok && pertama == null){
+                pertama = opt
+            }
+        }
+
+        if (pertama){
+            provider.value = pertama.value
+        }
+    }
+
+    methodType.addEventListener('change', filterProvider);
+    filterProvider();
 </script>
 {% endblock content %}

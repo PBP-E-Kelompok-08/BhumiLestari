@@ -64,6 +64,18 @@ https://share.gemini.google/UbXVTgv68vdl
 ### Athifah Mufidah
 
 ### Nurfadhil Kurniawan
+<div align = "justify">
+Saya menggunakan AI Claude (Free Plan) untuk membantu saya memahami modul Users yang saya kerjakan. Setelah modul ini selesai, saya kembali mengunggah source code modul tersebut dalam bentuk ZIP ke Claude untuk membantu saya mengidentifikasi dan meningkatkan aspek keamanan pada kode yang sudah saya buat.
+
+Dalam prosesnya, saya tetap berusaha mengimplementasikan setiap perbaikan secara mandiri terlebih dahulu. Jika mengalami kesulitan, saya akan meminta Claude memberikan petunjuk (hint) untuk membantu saya menemukan solusinya. Namun, jika saya benar-benar tidak menemukan jalan keluar, barulah saya meminta Claude memberikan contoh implementasi yang benar berdasarkan kode terakhir yang telah saya buat.
+
+Perlu digarisbawahi bahwa AI hanya berperan sebagai alat bantu dalam proses belajar dan pengembangan. Seluruh keputusan terkait solusi yang digunakan dan implementasi akhir tetap berada di tangan saya sepenuhnya.
+Berikut adalah beberapa link Claude yg saya gunakan:
+<ul>
+<li>https://claude.ai/share/e22275f6-35e4-477b-8004-6de52e3428c1</li>
+<li>https://claude.ai/share/6df6be04-f70c-4378-beca-70341a82ea97</li>
+</ul>
+</div>
 
 ### Regina Gunadi
 <div align = "justify">

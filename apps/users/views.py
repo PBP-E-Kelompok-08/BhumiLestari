@@ -9,7 +9,20 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import OTPToken, SellerProfile, PaymentMethod
-from .forms import LogoForm
+from .forms import LogoForm, PaymentForm, PROVIDERS
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction, IntegrityError
+from django.core.validators import EmailValidator
+from django.db.models import F
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
+from django.core.cache import cache
+from django.core.files.storage import default_storage
+from django.db.models import ProtectedError
+import logging
+import secrets
+import hashlib
 import json
 
 from .models import OTPToken, SellerProfile
@@ -17,21 +30,50 @@ from .models import OTPToken, SellerProfile
 # Create your views here.
 User = get_user_model()
 
+logger = logging.getLogger(__name__)
+email_validator = EmailValidator()
+
+MAX_PAYMENT_METHODS = 5
+MAX_OTP_ATTEMPTS = 5
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_LOCKOUT_SECONDS = 5 * 60
+
 # API AJAX untuk kirim OTP
 @require_POST
 def send_otp_api(request):
+    # Parse json kalau gagal -> status=400
     try:
         data = json.loads(request.body)
-        email = (data.get('email') or '').strip().lower()
+    except json.JSONDecodeError:
+        return JsonResponse({'success' : False, 'message' : 'Format request tidak valid.'}, status=400)
 
-        if not email:
-            return JsonResponse({'success': False, 'message': 'Email wajib diisi!'}, status=400)
+    # Cek Format harus dict
+    if not isinstance(data, dict):
+        return JsonResponse({'success' : False, 'message' : 'Format request tidak valid.'}, status=400)
+    
+    email = (data.get('email') or '').strip().lower()
+    if not email:
+        return JsonResponse({'success': False, 'message': 'Email wajib diisi!'}, status=400)
 
-        if User.objects.filter(email=email).exists():
-            return JsonResponse({'success': False, 'message': 'Email sudah terdaftar, silahkan login!'}, status=400)
+    try:
+        email_validator(email)
+    except ValidationError:
+        return JsonResponse({'success' : False, 'message': 'Email tidak valid'},status=400)
+    
+    if User.objects.filter(email__iexact=email).exists():
+        return JsonResponse({'success': False, 'message': 'Email sudah terdaftar, silahkan login!'}, status=400)
 
+    last_otp = OTPToken.objects.filter(email=email).order_by('-created_at').first()
+    if last_otp and last_otp.created_at > timezone.now() - timedelta(seconds=60):
+        return JsonResponse({'success': False, 'message': 'Tunggu 60 detik sebelum meminta OTP lagi.'}, status=429)
+    
+    token = None
+    try:        
         otp_code = OTPToken.generate_otp()
-        OTPToken.objects.create(email=email, otp_code=otp_code)
+        OTPToken.objects.filter(email=email, is_used=False).update(is_used=True)
+       
+        token = OTPToken.objects.create(email=email, otp_code=otp_code)
 
         send_mail(
             subject='Kode OTP Pendaftaran BhumiLestari',
@@ -41,93 +83,169 @@ def send_otp_api(request):
             fail_silently=False,
         )
         return JsonResponse({'success': True, 'message': 'Kode OTP telah dikirim ke email kamu.'})
-    except Exception as e:
+    except Exception:
+        logger.exception('Gagal mengirim OTP ke %s', email)
+        if token:
+            token.delete()
         return JsonResponse({'success': False, 'message': 'Gagal mengirim OTP, coba lagi.'}, status=500)
+
+def _login_key(request, email):
+    ip = request.META.get('REMOTE_ADDR', '')
+    raw = f'{ip}:{email.lower()}'
+    return 'login_fail:' + hashlib.sha256(raw.encode()).hexdigest()
 
 # view Pendaftaran (SignUp)
 def register_view(request):
     if request.method == 'POST':
-        role = request.POST.get('role', 'buyer')
-        full_name = request.POST.get('full_name')
-        store_name = request.POST.get('store_name')
-        username_input = request.POST.get('username')
-        email = request.POST.get('email')
-        otp_code = request.POST.get('otp_code')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
+        role = (request.POST.get('role') or 'buyer').strip()
+        full_name = (request.POST.get('full_name') or '').strip()
+        store_name = (request.POST.get('store_name') or '').strip()
+        username_input = (request.POST.get('username') or '').strip()
+        email = (request.POST.get('email') or '').strip().lower()
+        otp_code = (request.POST.get('otp_code') or '').strip()
+        password = (request.POST.get('password') or '')
+        confirm_password = (request.POST.get('confirm_password') or '')
+
+        form_data = {
+            'role' : role,
+            'full_name' : full_name,
+            'store_name' : store_name,
+            'username_input' : username_input,
+            'email' : email,
+        }
+
+        # Validasi role: return HTML
+        if role not in dict(User.CHOICE_ROLE):
+            messages.error(request, 'Role tidak valid')
+            return render(request, 'register.html', {'form_data' : form_data})
+
+        # Field wajib untuk Full Name
+        if not full_name:
+            messages.error(request, 'Nama Lengkap Wajib di isi!')
+            return render(request, 'register.html', {'form_data' : form_data})
+        
+        # Field wajib tergantung role
+        if role == User.ROLE_SELLER:
+            username = store_name
+            if not store_name:
+                messages.error(request, 'Nama toko wajib di isi!')
+                return render(request, 'register.html', {'form_data' : form_data})
+        else:
+            username = username_input
+            if not username_input:
+                messages.error(request, 'Username Wajib di isi!')
+                return render(request, 'register.html', {'form_data' : form_data})
+
+        if User.objects.filter(username__iexact=username).exists():
+            messages.error(request, 'Username telah digunakan! Harap gunakan username lain.')
+            return render(request, 'register.html', {'form_data' : form_data})
+
+        if User.objects.filter(email__iexact=email).exists():
+            messages.error(request, 'Email telah terdaftar! Silahkan Login.')
+            return render(request, 'register.html', {'form_data' : form_data})
+
+        if role == User.ROLE_SELLER:
+            if SellerProfile.objects.filter(store_name__iexact=store_name).exists():
+                messages.error(request, 'Nama toko sudah digunakan! Harap gunakan nama lain.')
+                return render(request, 'register.html', {'form_data' : form_data})
 
         if password != confirm_password:
             messages.error(request, 'Konfirmasi password tidak cocok!')
-            return render(request, 'register.html')
+            return render(request, 'register.html', {'form_data' : form_data})
 
         try:
-            validate_password(password)
+            validate_password(password, user=User(username=username, email=email))
         except ValidationError as e:
             for m in e.messages:
                 messages.error(request, m)
-            return render(request, 'register.html')
+            return render(request, 'register.html', {'form_data' : form_data})
 
-        otp_obj = OTPToken.objects.filter(email=email, otp_code=otp_code).last()
+        otp_obj = OTPToken.objects.filter(email=email).order_by('-created_at').first()
+
         if not otp_obj or not otp_obj.is_valid():
             messages.error(request, 'Kode OTP salah atau sudah kadaluarsa')
-            return render(request, 'register.html')
+            return render(request, 'register.html', {'form_data' : form_data})
 
-        if role == User.ROLE_SELLER:
-            username = email.split('@')[0] + '_seller'
-        else:
-            username = username_input or email.split('@')[0]
+        counted = OTPToken.objects.filter(
+            pk=otp_obj.pk, attempts__lt=MAX_OTP_ATTEMPTS).update(attempts=F('attempts')+1
+        )
+        if not counted:
+            messages.error(request, 'Terlalu banyak percobaan. Silahkan minta OTP baru.')
+            return render(request, 'register.html', {'form_data': form_data})
 
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "Username telah digunakan, coba yang lain.")
-            return render(request, 'register.html')
+        if not secrets.compare_digest(otp_obj.otp_code.encode(), otp_code.encode()):
+            messages.error(request, 'Kode OTP salah atau sudah kadaluarsa')
+            return render(request, 'register.html', {'form_data': form_data})
 
         # Buat User baru
         try:
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                full_name=full_name,
-                role=role
-            )
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    full_name=full_name,
+                    role=role
+                )
 
-            # Buat Profil toko jika mendaftar sebagi penjual
-            if role == User.ROLE_SELLER and store_name:
-                SellerProfile.objects.create(user=user, store_name=store_name)
+                # Buat Profil toko jika mendaftar sebagi penjual
+                if role == User.ROLE_SELLER:
+                    SellerProfile.objects.create(user=user, store_name=store_name)
 
-            # Tandai OTP telah terpakai
-            otp_obj.is_used = True
-            otp_obj.save()
-
-            # Autologin setelah registrasi sukses
-            login(request, user)
-            messages.success(request, 'Pendaftaran berhasil! Selamat datang di BhumiLestari.')
-            return redirect('dashboard:show_dashboard_home')
+                # Tandai OTP telah terpakai
+                otp_obj.is_used = True
+                otp_obj.save()
+        except IntegrityError:
+            messages.error(request, 'Username, email, atau nama toko sudah digunakan. Silahkan coba lagi.')
+            return render(request, 'register.html', {'form_data' : form_data})
         except Exception:
+            logger.exception('Gagal membuat akun: role=%s username=%s', role, username)
             messages.error(request, 'Terjadi kesalahan saat mendaftar, coba lagi.')
+            return render(request, 'register.html', {'form_data' : form_data})
+
+        # Autologin setelah registrasi sukses
+        login(request, user)
+        messages.success(request, 'Pendaftaran berhasil! Selamat datang di BhumiLestari.')
+        return redirect('dashboard:show_dashboard_home')
 
     return render(request, 'register.html')
 
 # View Login
 def login_view(request):
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
     if request.method == 'POST':
         email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
+
+        login_url = reverse('users:login')
+        login_url = reverse('users:login')
+        if next_url:
+            login_url += '?' + urlencode({'next' : next_url})
+
+        key = _login_key(request, email)
+
+        if cache.get(key, 0) >= MAX_LOGIN_ATTEMPTS:
+            messages.error(request, f'Terlalu banyak percobaan login. Coba lagi dalam {LOGIN_LOCKOUT_SECONDS // 60} menit')
+            return redirect(login_url)
+
         user_obj = User.objects.filter(email__iexact=email).first()
         user = authenticate(request, username=user_obj.email, password=password) if user_obj else None
-
         if user is None:
+            cache.add(key, 0, LOGIN_WINDOW_SECONDS)
+            attempts = cache.incr(key)
+            if attempts >= MAX_LOGIN_ATTEMPTS:
+                cache.set(key, attempts, LOGIN_LOCKOUT_SECONDS)
             messages.error(request, "Email atau password salah!")
-            return redirect('users:login')
+            return redirect(login_url)
 
-        # if user.role == 'seller':
-        #     messages.warning(request, 'Maaf, halaman penjual sedang dalam maintenance.')
-        #     return redirect('users:login')
-
+        cache.delete(key)
         login(request, user)
+
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            return redirect(next_url)
         return redirect('dashboard:show_dashboard_home')
     
-    return render(request, 'login.html')
+    return render(request, 'login.html', {'next' : next_url})
 
 @require_POST
 def logout_view(request):
@@ -154,24 +272,60 @@ def account_settings(request):
                 return redirect('users:account_settings')
             
             name = request.POST.get('name', '').strip()
-            if is_seller:
-                profile, _ = SellerProfile.objects.get_or_create(
-                    user=user, defaults={'store_name': name or user.username}
-                )
-                if name:
-                    profile.store_name = name
-                    profile.save()
-            else:
-                user.full_name = name
-            user.phone = request.POST.get('phone', '').strip()
-            user.address = request.POST.get('address', '').strip()
+            phone = request.POST.get('phone', '').strip()
+            address = request.POST.get('address', '').strip()
+
+            # Validasi nama
+            max_name = 100 if is_seller else 150
+            if not name:
+                messages.error(request, 'Nama wajib diisi.')
+                return redirect('users:account_settings')
+            if len(name) > max_name:
+                messages.error(request, f'Nama maksimal {max_name} karakter.')
+                return redirect('users:account_settings')
+
+            # Validasi nomor telepon (boleh kosong)
+            if phone:
+                digits = phone[1:] if phone.startswith('+') else phone
+                if not digits.isdigit() or not 8 <= len(digits) <= 15:
+                    messages.error(request, 'Nomor telepon harus 8 sampai 15 digit angka (boleh diawali +).')
+                    return redirect('users:account_settings')
+
+            # Validasi alamat
+            if len(address) > 500:
+                messages.error(request, 'Alamat maksimal 500 karakter.')
+                return redirect('users:account_settings')
+            
+            # Cek nama toko kembar (abaikan toko milik user ini sendiri)
+            if is_seller and SellerProfile.objects.filter(store_name__iexact=name).exclude(user=user).exists():
+                messages.error(request, 'Nama toko sudah dipakai, silahkan pilih nama lain.')
+                return redirect('users:account_settings')
 
             new_logo = logo_form.cleaned_data['logo']
-            if new_logo:
-                if user.logo:
-                    user.logo.delete(save=False)
-                user.logo = new_logo
-            user.save()
+            old_logo_name = None
+
+            with transaction.atomic():
+                if is_seller:
+                    profile, _ = SellerProfile.objects.get_or_create(
+                        user=user, defaults={'store_name': name}
+                    )
+                    profile.store_name = name
+                    profile.save()
+                else:
+                    user.full_name = name
+
+                user.phone = phone
+                user.address = address
+
+                if new_logo:
+                    old_logo_name = user.logo.name if user.logo else None
+                    user.logo = new_logo
+                user.save()
+
+            # Hapus file logo lama SETELAH semua berhasil tersimpan
+            if old_logo_name:
+                default_storage.delete(old_logo_name)
+
             messages.success(request, 'Perubahan berhasil disimpan.')
 
         elif action == 'password':
@@ -195,23 +349,30 @@ def account_settings(request):
                     messages.success(request, 'Password berhasil diperbarui.')
 
         elif action == 'add_payment':
-            method_type = request.POST.get('method_type')
-            provider = request.POST.get('provider', '').strip()
-            number = request.POST.get('account_number', '').strip()
-            if method_type in dict(PaymentMethod.TYPE_CHOICES) and provider and number.isdigit():
-                PaymentMethod.objects.create(
-                    user=user, method_type=method_type,
-                    provider=provider, account_number=number
-                )
-                messages.success(request, 'Metode pembayaran ditambahkan.')
+            if user.payment_methods.count() >= MAX_PAYMENT_METHODS:
+                messages.error(request, f'maksimal {MAX_PAYMENT_METHODS} metode pembayaran.')
             else:
-                messages.error(request, 'Lengkapi data metode pembayaran.')
+                form = PaymentForm(request.POST)
+                if form.is_valid():
+                    pm = form.save(commit=False)
+                    pm.user = user
+                    pm.save()
+                    messages.success(request, 'Metode pembayaran ditambahkan')
+                else:
+                    for errors in form.errors.values():
+                        for error in errors:
+                            messages.error(request, error)
 
         elif action == 'delete_payment':
-            PaymentMethod.objects.filter(
-                id=request.POST.get('payment_id'), user=user
-            ).delete()
-            messages.success(request, 'Metode pembayaran dihapus.')
+            payment_id = request.POST.get('payment_id', '')
+            if not (payment_id.isascii() and payment_id.isdigit() and len(payment_id) <= 18):
+                messages.error(request, 'Metode pembayaran tidak valid.')
+            else:
+                deleted, _ = PaymentMethod.objects.filter(id=int(payment_id), user=user).delete()
+                if deleted:
+                    messages.success(request, 'Metode pembayaran dihapus.')
+                else:
+                    messages.error(request, 'Metode pembayaran tidak ditemukan.')
 
         elif action == 'delete_account':
             password = request.POST.get('password', '')
@@ -220,17 +381,24 @@ def account_settings(request):
             elif user.is_superuser:
                 messages.error(request, 'Akun admin tidak dapat dihapus dari sini.')
             else:
-                if user.logo:
-                    user.logo.delete(save=False)   # hapus file logo dari storage
+                logo_name = user.logo.name if user.logo else None
+                try:
+                    with transaction.atomic():
+                        user.delete()   # SellerProfile & PaymentMethod ikut terhapus (CASCADE)
+                except ProtectedError:
+                    messages.error(request, 'Akun tidak bisa dihapus karena masih punya data terkait.')
+                    return redirect('users:account_settings')
+
+                if logo_name:
+                    default_storage.delete(logo_name)
                 logout(request)
-                user.delete()                       # SellerProfile & PaymentMethod ikut terhapus (CASCADE)
                 messages.success(request, 'Akun Anda berhasil dihapus.')
                 return redirect('dashboard:show_dashboard_home')
 
         return redirect('users:account_settings') 
 
     current_name = (
-        getattr(getattr(user, 'seller_profile', None), 'store_name', '')
+        (getattr(getattr(user, 'seller_profile', None), 'store_name', '') or user.username)
         if is_seller else user.full_name
     )
     return render(request, 'account_settings.html', {
@@ -238,4 +406,5 @@ def account_settings(request):
         'current_name': current_name,
         'masked_email': mask_email(user.email),
         'payment_methods': user.payment_methods.all(),
+        'providers': PROVIDERS,
     })
