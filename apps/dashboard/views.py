@@ -73,7 +73,7 @@ def _statistik_penjualan(profile=None, periode="bulanan"):
         perubahan = round((pendapatan - pendapatan_lalu) * 100 / pendapatan_lalu, 1)
         pertumbuhan = f"{perubahan:+g}%"
     elif pendapatan:
-        pertumbuhan = "Baru"
+        pertumbuhan = "Belum ada pembanding"
     else:
         pertumbuhan = "0%"
     return {

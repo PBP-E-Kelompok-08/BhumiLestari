@@ -130,3 +130,4 @@ class DashboardTest(TestCase):
         self.assertEqual(penjualan["pendapatan"], 300000)
         self.assertEqual(penjualan["rata_pesanan"], 300000)
         self.assertEqual(penjualan["produk_terlaris"][0]["terjual"], 3)
+        self.assertEqual(penjualan["pertumbuhan"], "Belum ada pembanding")
