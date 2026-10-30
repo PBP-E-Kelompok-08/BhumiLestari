@@ -20,6 +20,31 @@ HANDOVER_TOKEN = "[HANDOVER_TO_SELLER]"
 
 
 def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot_name="BhumiBot", general_knowledges=None, real_products=None):
+    """
+    Menyusun instruksi sistem (system prompt) yang terstruktur dan ketat untuk AI Assistant toko.
+
+    Alur & Komponen yang disusun:
+    1. Identitas Bot: Nama bot (EucalypBot/BhumiBot) dan nama toko yang diwakili.
+    2. Informasi Umum Toko: Q&A kata kunci umum penjual (jam buka, pengiriman, garansi, dll).
+    3. Katalog Produk Nyata: Data produk aktif toko (nama, harga, stok, deskripsi) dari model Product.
+    4. Konteks Produk Terpilih: Pertanyaan & jawaban spesifik untuk produk yang sedang dikonsultasikan pembeli.
+    5. Aturan Anti-Halusinasi & Handover:
+       - AI HANYA boleh menjawab dari data resmi yang disediakan penjual.
+       - Jika pembeli menanyakan hal di luar data resmi atau meminta bicara langsung dengan penjual,
+         AI WAJIB mengawali balasan dengan token khusus: [HANDOVER_TO_SELLER].
+       - Dilarang mengarang promo, diskon, atau harga di luar katalog.
+
+    Args:
+        store_name (str): Nama toko penjual.
+        product_contexts (list[SessionProductContext]): Produk yang sedang dikaitkan pada sesi chat ini.
+        knowledges_by_product (dict): Mapping product_id -> list[ProductKnowledge] Q&A produk.
+        bot_name (str, optional): Nama bot penjual. Default "BhumiBot".
+        general_knowledges (list[ProductKnowledge], optional): Daftar Q&A toko umum tanpa product_id.
+        real_products (list[Product], optional): Objek produk aktif dari database produk toko.
+
+    Returns:
+        str: String system prompt lengkap siap dikirim ke OpenRouter.
+    """
     general_section = ""
     if general_knowledges:
         general_section = "\n--- [INFORMASI UMUM TOKO & KATA KUNCI] ---\n"
@@ -85,6 +110,29 @@ def build_system_prompt(store_name, product_contexts, knowledges_by_product, bot
 
 # Model switching kalo kena limit di 1 model
 def query_openrouter(messages_payload, custom_models=None):
+    """
+    Mengirimkan payload pesan percakapan ke OpenRouter AI Chat Completion API.
+
+    Fitur Utama:
+    1. Multi-Model Fallback Chain:
+       Jika model utama (misal Gemini 2.5 Flash) mengalami rate-limit (429), server sibuk (503),
+       atau timeout, sistem otomatis mencoba model berikutnya (LLaMA 3.2, DeepSeek, Auto, Liquid).
+    2. Temperatur Rendah (0.2):
+       Memastikan jawaban bot konsisten, faktual, dan tidak berhalusinasi.
+    3. Ekstraksi Reasoning & Content:
+       Mendukung model dengan format 'content' langsung maupun model tipe reasoning.
+
+    Args:
+        messages_payload (list[dict]): Riwayat percakapan format OpenRouter [{"role": "system|user|assistant", "content": "..."}].
+        custom_models (list[str], optional): Daftar model spesifik yang ingin dicoba.
+
+    Returns:
+        str: Teks balasan dari model AI.
+
+    Raises:
+        ValueError: Jika API_KEY tidak ditemukan di environment (.env) atau respons kosong.
+        RuntimeError: Jika semua model dalam daftar fallback gagal dihubungi.
+    """
     api_key = os.getenv("API_KEY")
     if not api_key:
         raise ValueError("API_KEY tidak ditemukan di environment (.env).")
@@ -146,6 +194,21 @@ def query_openrouter(messages_payload, custom_models=None):
 
 # return (handover_flag: bool, clean_reply: str)
 def parse_handover_signal(ai_reply_text):
+    """
+    Menganalisis teks balasan AI untuk mendeteksi token sinyal pengalihan (handover).
+
+    Jika balasan mengandung token `[HANDOVER_TO_SELLER]`:
+    - Mengindikasikan pembeli menanyakan hal di luar data resmi toko atau meminta bicara langsung.
+    - Token dihapus dari teks balasan agar pengguna mendapatkan pesan yang ramah dan bersih.
+
+    Args:
+        ai_reply_text (str): Teks balasan mentah yang dikembalikan oleh OpenRouter.
+
+    Returns:
+        tuple[bool, str]:
+            - is_handover (bool): True jika sinyal eskalasi ke penjual terdeteksi.
+            - clean_reply (str): Teks balasan yang telah dibersihkan dari token teknis.
+    """
     if not ai_reply_text:
         return False, ""
 

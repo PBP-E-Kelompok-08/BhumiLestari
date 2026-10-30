@@ -1,59 +1,67 @@
 {% extends "base.html" %}
 {% load static %}
+{% load rupiah %}
 
 {% block meta %}
-  <title>Pesanan #1016 - BhumiLestari</title>
+  <title>Pesanan #{{ order.pk }} - BhumiLestari</title>
   <link rel="stylesheet" href="{% static 'css/order_detail.css' %}">
 {% endblock meta %}
 
 {% block content %}
 <div class="order-page">
   <a href="{% url 'checkout:order_list' %}" class="back-link">← Kembali ke Tabel</a>
-  <h1 class="page-title">Pesanan #1016</h1>
+  <h1 class="page-title">Pesanan #{{ order.pk }}</h1>
+  {% for message in messages %}<p role="alert" class="order-message">{{ message }}</p>{% endfor %}
 
   <div class="order-grid">
 
     <section class="card">
       <h2 class="card-title">Rincian Barang</h2>
-      <dl class="rows">
-        <div class="row"><dt>Nama Barang</dt><dd>: Tas Kain</dd></div>
-        <div class="row"><dt>Jumlah</dt><dd>: 2 buah</dd></div>
-        <div class="row"><dt>Harga</dt><dd>: Rp. 19.000</dd></div>
+      {% for item in items %}
+      <dl class="rows {% if not forloop.first %}rows-next{% endif %}">
+        <div class="row"><dt>Nama Barang</dt><dd>: {{ item.product_name }}</dd></div>
+        <div class="row"><dt>Jumlah</dt><dd>: {{ item.quantity }} buah</dd></div>
+        <div class="row"><dt>Harga</dt><dd>: Rp. {{ item.price|rupiah }}</dd></div>
+      </dl>
+      {% endfor %}
+      <dl class="rows rows-next">
+        <div class="row"><dt>Subtotal</dt><dd>: Rp. {{ subtotal|rupiah }}</dd></div>
+        {% if not is_seller %}
+        <div class="row"><dt>Ongkir</dt><dd>: Rp. {{ order.shipping_cost|rupiah }}</dd></div>
+        {% endif %}
       </dl>
       <dl class="rows rows-next">
-        <div class="row"><dt>Subtotal</dt><dd>: Rp. 38.000</dd></div>
-        <div class="row"><dt>Ongkir</dt><dd>: Rp. 10.000</dd></div>
-      </dl>
-      <dl class="rows rows-next">
-        <div class="row row-total"><dt>Total</dt><dd>: Rp. 48.000</dd></div>
+        <div class="row row-total"><dt>Total</dt><dd>: Rp. {{ total|rupiah }}</dd></div>
       </dl>
     </section>
 
     <section class="card">
-      <h2 class="card-title">Informasi Pembeli</h2>
+      <h2 class="card-title">{% if is_seller %}Informasi Pembeli{% else %}Informasi Penerima{% endif %}</h2>
       <dl class="rows">
-        <div class="row"><dt>Nama</dt><dd>: Anisa Rahman</dd></div>
-        <div class="row"><dt>Telepon</dt><dd>: 0877-1234-5679</dd></div>
-        <div class="row"><dt>Alamat</dt><dd>: Jl.Dahlia No. 13, Depok</dd></div>
+        <div class="row"><dt>Nama</dt><dd>: {{ order.recipient_name }}</dd></div>
+        <div class="row"><dt>Telepon</dt><dd>: {{ order.phone }}</dd></div>
+        <div class="row"><dt>Alamat</dt><dd>: {{ order.shipping_address }}</dd></div>
       </dl>
-      <h2 class="card-title subhead">Catatan Pembeli</h2>
-      <p class="note">Tolong datang barangnya di weekend ya, terima kasih.</p>
     </section>
 
     <section class="card">
-      <h2 class="card-title">Pembayaran</h2>
+      <h2 class="card-title">Pembayaran dan Pengiriman</h2>
       <dl class="rows">
-        <div class="row"><dt>Metode Pembayaran</dt><dd>: COD</dd></div>
-        <div class="row"><dt>Status Pembayaran</dt><dd>: <span class="pill">Pending</span></dd></div>
+        <div class="row"><dt>Metode Pembayaran</dt><dd>: {{ order.get_payment_method_display }}</dd></div>
+        <div class="row"><dt>Pengiriman</dt><dd>: {{ order.get_shipping_method_display }}</dd></div>
       </dl>
     </section>
 
     <section class="card">
-      <h2 class="card-title">Konfirmasi Pesanan</h2>
+      <h2 class="card-title">{% if is_seller %}Konfirmasi Pesanan{% else %}Status Pesanan{% endif %}</h2>
+      <p><span class="badge badge-{{ badge }}">{{ label }}</span></p>
       <form method="post" class="confirm-actions">
         {% csrf_token %}
+        {% if is_seller and order.status == "diproses" %}
         <button type="submit" name="aksi" value="terima" class="btn btn-accept">Terima Pesanan</button>
-        <button type="submit" name="aksi" value="tolak" class="btn btn-reject">Tolak Pesanan</button>
+        {% elif not is_seller and order.status == "dikirim" %}
+        <button type="submit" name="aksi" value="selesai" class="btn btn-accept">Pesanan Diterima</button>
+        {% endif %}
       </form>
     </section>
 

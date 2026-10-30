@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>{{ judul }} - BhumiLestari</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/reviews.css' %}">
+{% endblock meta %}
+
+{% block content %}
+{# Ikon pohon (pengganti bintang di desain). Warna lewat CSS variable. #}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="rv-pohon" viewBox="0 0 24 24">
+    <g style="fill:var(--rv-kanopi,#3a8f1f)">
+      <circle cx="12" cy="7.5" r="5.5"/><circle cx="6.8" cy="11" r="4.3"/>
+      <circle cx="17.2" cy="11" r="4.3"/><circle cx="12" cy="12" r="5"/>
+    </g>
+    <rect x="11" y="14.5" width="2" height="8" rx="1" style="fill:var(--rv-batang,#8a2b1d)"/>
+  </symbol>
+</svg>
+
+<nav class="rv-crumb" aria-label="Navigasi">
+  <a href="{% url 'dashboard:show_dashboard_home' %}">Beranda</a>
+  {% if mode == "toko" %}
+    <span aria-hidden="true">›</span> <a href="{% url 'dashboard:show_dashboard_home' %}">Katalog</a>
+    <span aria-hidden="true">›</span> <strong>{{ judul }}</strong>
+  {% else %}
+    <span aria-hidden="true">›</span> <strong>{{ judul }}</strong>
+  {% endif %}
+</nav>
+
+<div class="rv-page" id="rv-root"
+     data-mode="{{ mode }}"
+     data-url-data="{{ url_data }}"
+     {% if url_tambah %}data-url-tambah="{{ url_tambah }}"{% endif %}
+     data-url-edit="{% url 'reviews:edit' 0 %}"
+     data-url-hapus="{% url 'reviews:hapus' 0 %}"
+     data-url-balas="{% url 'reviews:balas' 0 %}"
+     data-url-balas-edit="{% url 'reviews:balas_edit' 0 %}"
+     data-url-balas-hapus="{% url 'reviews:balas_hapus' 0 %}"
+     data-url-laporkan="{% url 'reviews:laporkan' 0 %}"
+     data-url-toko="{% url 'reviews:halaman_toko' 0 %}"
+     data-url-login="{{ login_url }}">
+  <input type="hidden" id="rv-csrf" value="{{ csrf_token }}">
+
+  <section class="rv-ulasan" aria-labelledby="rv-heading">
+    <h1 id="rv-heading" class="rv-heading">{{ heading }}</h1>
+    {% if toko and mode == "toko" %}<p class="rv-toko-nama">{{ toko.store_name }}</p>{% endif %}
+
+    {% if mode != "saya" %}
+    <div class="rv-atas">
+      <div class="rv-skor" id="rv-skor" aria-live="polite"></div>
+      <div class="rv-dists" id="rv-dists"></div>
+    </div>
+
+    <form id="rv-filter" class="rv-filter" method="get" onsubmit="return false;">
+      {{ form_filter.rating }}
+      {{ form_filter.foto }}
+
+      <div class="rv-chips" role="group" aria-label="Filter cepat">
+        <button type="button" class="rv-chip is-aktif" data-chip="semua">Semua</button>
+        <button type="button" class="rv-chip" data-chip="foto" aria-pressed="false">Dengan Foto</button>
+        {% for n in "54321" %}
+        <button type="button" class="rv-chip" data-chip="rating" data-nilai="{{ n }}" aria-pressed="false"
+                aria-label="Rating {{ n }}">{{ n }} <svg class="rv-pohon rv-mono" aria-hidden="true"><use href="#rv-pohon"/></svg></button>
+        {% endfor %}
+      </div>
+
+      <div class="rv-opsi">
+        <label class="rv-opsi-item">
+          <span>{{ form_filter.produk.label }}</span>
+          {{ form_filter.produk }}
+        </label>
+        <label class="rv-opsi-item">
+          <span>{{ form_filter.urut.label }}</span>
+          {{ form_filter.urut }}
+        </label>
+        <label class="rv-cek">{{ form_filter.terverifikasi }} {{ form_filter.terverifikasi.label }}</label>
+        {% if form_filter.belum_dibalas %}
+        <label class="rv-cek">{{ form_filter.belum_dibalas }} {{ form_filter.belum_dibalas.label }}</label>
+        {% endif %}
+        <button type="button" class="rv-link" id="rv-reset">Reset filter</button>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if mode == "toko" %}
+      {% if form_tulis %}
+      <form id="rv-form-tulis" class="rv-tulis" enctype="multipart/form-data" novalidate>
+        <div class="rv-tulis-komentar-box">
+          <label class="rv-sr" for="{{ form_tulis.komentar.id_for_label }}">{{ form_tulis.komentar.label }}</label>
+          {{ form_tulis.komentar }}
+        </div>
+
+        <div class="rv-tulis-divider"></div>
+
+        <div class="rv-tulis-lanjut">
+          <div class="rv-field">
+            <label for="{{ form_tulis.produk_id.id_for_label }}">{{ form_tulis.produk_id.label }}</label>
+            {{ form_tulis.produk_id }}
+          </div>
+          <div class="rv-field">
+            <span class="rv-label">{{ form_tulis.rating.label }}</span>
+            <div class="rv-rating-pilihan">{{ form_tulis.rating }}</div>
+          </div>
+          <div class="rv-field rv-field-foto">
+            <label for="{{ form_tulis.foto.id_for_label }}">{{ form_tulis.foto.label }}</label>
+            {{ form_tulis.foto }}
+          </div>
+        </div>
+
+        <div class="rv-tulis-footer">
+          <button type="submit" class="rv-btn rv-btn-utama rv-btn-kirim">Kirim Ulasan</button>
+        </div>
+        <p class="rv-error" id="rv-tulis-error" role="alert" hidden></p>
+      </form>
+      {% elif info_tulis %}
+      <p class="rv-info">{{ info_tulis }}
+        {% if not user.is_authenticated %}<a href="{{ login_url }}">Login di sini</a>.{% endif %}
+      </p>
+      {% endif %}
+    {% endif %}
+
+    <div id="rv-loading" class="rv-state" hidden>Memuat ulasan...</div>
+    <div id="rv-error" class="rv-state rv-state-error" hidden>
+      Gagal memuat ulasan. <button type="button" class="rv-link" id="rv-coba-lagi">Coba lagi</button>
+    </div>
+    <div id="rv-kosong" class="rv-state" hidden>Belum ada ulasan.</div>
+
+    <div id="rv-list" class="rv-list"></div>
+
+    <button type="button" id="rv-lagi" class="rv-btn rv-btn-garis rv-lagi" hidden>Lihat Selengkapnya</button>
+  </section>
+
+  <p id="rv-toast" class="rv-toast" role="status" aria-live="polite" hidden></p>
+
+  <dialog id="rv-dialog" class="rv-dialog" aria-labelledby="rv-dialog-judul">
+    <form id="rv-dialog-form" class="rv-form" novalidate>
+      <h2 id="rv-dialog-judul" class="rv-dialog-judul"></h2>
+      <div id="rv-dialog-isi"></div>
+      <p class="rv-error" id="rv-dialog-error" role="alert" hidden></p>
+      <div class="rv-dialog-aksi">
+        <button type="button" class="rv-btn rv-btn-garis" id="rv-dialog-batal">Batal</button>
+        <button type="submit" class="rv-btn rv-btn-utama" id="rv-dialog-kirim">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  {# Lightbox Modal untuk Zoom Foto dengan Latar Belakang Blur #}
+  <dialog id="rv-lightbox" class="rv-lightbox" aria-label="Pratinjau Foto Ulasan">
+    <div class="rv-lightbox-wrap">
+      <button type="button" id="rv-lightbox-tutup" class="rv-lightbox-tutup" aria-label="Tutup pratinjau">✕</button>
+      <img id="rv-lightbox-img" src="" alt="Pratinjau Foto Ulasan">
+    </div>
+  </dialog>
+
+  {# Isi dialog diambil dari form Django (bukan HTML tulisan tangan) #}
+  <template id="tpl-edit">
+    <div class="rv-field">
+      <span class="rv-label">{{ form_edit.rating.label }}</span>
+      <div class="rv-rating-pilihan">{{ form_edit.rating }}</div>
+    </div>
+    <div class="rv-field">
+      <label for="{{ form_edit.komentar.id_for_label }}">{{ form_edit.komentar.label }}</label>
+      {{ form_edit.komentar }}
+    </div>
+  </template>
+  <template id="tpl-balas">
+    <div class="rv-field">
+      <label for="{{ form_balas.pesan.id_for_label }}">{{ form_balas.pesan.label }}</label>
+      {{ form_balas.pesan }}
+    </div>
+  </template>
+  <template id="tpl-laporan">
+    <div class="rv-field">
+      <label for="{{ form_laporan.alasan.id_for_label }}">{{ form_laporan.alasan.label }}</label>
+      {{ form_laporan.alasan }}
+    </div>
+  </template>
+</div>
+
+<script src="{% static 'js/reviews.js' %}"></script>
+{% endblock content %}

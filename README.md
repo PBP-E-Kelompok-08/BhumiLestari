@@ -53,6 +53,13 @@ https://www.figma.com/design/JG0Xg7sLjXzbTzazoMqXJY/Project-E08?node-id=1-4&t=Vr
 
 ## AI Disclosure
 ### Alfarrel Ersya Balawa
+<div align = "justify">
+AI yang digunakan adalah Gemini. Tujuan penggunaannya adalah untuk membantu mengimplementasikan struktur modul Chat (buyer chat, seller chat, AI chat, broadcast channel, rating chat session, dan report session). Selain itu, AI juga digunakan sebagai rekan diskusi dan debugging dalam menyusun interface, menyusun layout interface pada mobile view, serta membantu penyusunan unit testing.
+
+Strategi prompt yang digunakan adalah dengan tidak langsung mengcopy paste hasil dari AI sehingga kode yang diberikan oleh AI dapat dipelajari secara efektif, dan ditinjau secara detail. Strategi ini saya terapkan pada kode yang menurut saya tidak umum dan ilmunya cukup bernilai untuk menghabiskan waktu mengetik secara manual, sehingga ada beberapa bagian yang tidak menggunakan strategi tersebut.
+
+https://share.gemini.google/UbXVTgv68vdl
+</div>
 
 ### Athifah Mufidah
 
@@ -69,6 +76,10 @@ Berikut adalah beberapa link Claude yg saya gunakan:
 <li>https://claude.ai/share/6df6be04-f70c-4378-beca-70341a82ea97</li>
 </ul>
 </div>
+
+### Athifah Mufidah
+
+### Nurfadhil Kurniawan
 
 ### Regina Gunadi
 <div align = "justify">

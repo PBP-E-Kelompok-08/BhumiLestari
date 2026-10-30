@@ -25,10 +25,12 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-la3ur3xug26a^4@yn1$!z&4h-2%&1j(wa2y8yn_socc05q=2dk'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-local-marketplace-only' if os.getenv('PRODUCTION', 'False').lower() != 'true' else '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('PRODUCTION', 'False').lower() != 'true'
+if not SECRET_KEY:
+    raise RuntimeError('DJANGO_SECRET_KEY is required in production')
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "sultan-noor-bhumilestari.pws.cs.ui.ac.id"]
 
@@ -41,7 +43,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    "cloudinary_storage",
     'django.contrib.staticfiles',
+    "cloudinary",
 
     'apps.chat',
     'apps.checkout',
@@ -96,6 +100,9 @@ WSGI_APPLICATION = 'BhumiLestari.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
+USE_CLOUDINARY = PRODUCTION or os.getenv('USE_CLOUDINARY', 'False').lower() == 'true'
+POSTGRES_SCHEMA = os.getenv('SCHEMA') or 'bhumilestari'
+
 if PRODUCTION:
     DATABASES = {
         'default': {
@@ -106,10 +113,45 @@ if PRODUCTION:
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT'),
             'OPTIONS': {
-                'options': f"-c search_path={os.getenv('SCHEMA', 'public')}"
+                'options': f'-c search_path={POSTGRES_SCHEMA},public'
             }
         }
     }
+
+    from django.db.backends.signals import connection_created
+    from django.db.models.signals import pre_migrate
+    from django.dispatch import receiver
+
+    _schema_ensured = False
+
+    def _ensure_postgres_schema(connection):
+        global _schema_ensured
+        if _schema_ensured or connection.vendor != 'postgresql':
+            return
+        with connection.cursor() as cursor:
+            # Create the schema if the role is allowed to (no-op if it exists).
+            cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{POSTGRES_SCHEMA}";')
+            # Persist search_path at the role level so it survives connection
+            # pooling / DISCARD ALL (e.g. PgBouncer transaction mode).
+            cursor.execute(
+                f'ALTER ROLE CURRENT_USER SET search_path TO "{POSTGRES_SCHEMA}", public;'
+            )
+            # Apply it to the current session right away too.
+            cursor.execute(f'SET search_path TO "{POSTGRES_SCHEMA}", public;')
+        _schema_ensured = True
+
+    def _ensure_postgres_schema_on_connect(sender, connection, **kwargs):
+        _ensure_postgres_schema(connection)
+
+    connection_created.connect(
+        _ensure_postgres_schema_on_connect,
+        dispatch_uid='ensure_postgres_schema_on_connect',
+    )
+
+    @receiver(pre_migrate, dispatch_uid='ensure_postgres_schema_pre_migrate')
+    def _ensure_postgres_schema_pre_migrate(sender, app_config, verbosity, interactive, using, plan, apps, **kwargs):
+        from django.db import connections
+        _ensure_postgres_schema(connections[using])
 else:
     DATABASES = {
         'default': {
@@ -154,9 +196,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+WHITENOISE_USE_FINDERS = True
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -178,5 +221,18 @@ MOCK_API_BASE_URL = os.environ.get(
     "MOCK_API_BASE_URL",
     "https://alfarrel-ersya-bhumilestari-mockapi.pws.cs.ui.ac.id",
 )
+MOCK_API_WRITE_TOKEN = os.getenv('MOCK_API_WRITE_TOKEN', '')
+if PRODUCTION and not MOCK_API_WRITE_TOKEN:
+    raise RuntimeError('MOCK_API_WRITE_TOKEN is required in production')
 
+if USE_CLOUDINARY:
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+    }
+    STORAGES = {
+        "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
 LOGIN_URL = 'users:login'

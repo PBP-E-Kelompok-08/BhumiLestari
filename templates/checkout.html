@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load rupiah %}
+
+{% block meta %}
+<title>Checkout - BhumiLestari</title>
+<link rel="stylesheet" href="{% static 'css/cart_checkout.css' %}?v=7">
+{% endblock meta %}
+
+{% block content %}
+<main class="cc-page">
+    <h1 class="cc-title">Checkout</h1>
+
+    {% if error %}
+    <div class="cc-card co-error">{{ error }}</div>
+    {% endif %}
+
+    <form class="checkout-form" method="post" action="{% url 'checkout:show_checkout' %}" id="checkout-form">
+        {% csrf_token %}
+
+        <section class="cc-card">
+            <div class="co-row-between">
+                <h2>Alamat Pengiriman</h2>
+                <button type="button" class="co-link" id="addr-change">Ganti</button>
+            </div>
+            <p id="addr-empty" {% if form.address %}hidden{% endif %}>Belum ada alamat. Klik "Ganti" untuk mengisi.</p>
+            <div id="addr-filled" {% if not form.address %}hidden{% endif %}>
+                <p><strong>Penerima :</strong> <span id="addr-name">{{ form.recipient_name }}</span> (<span id="addr-phone">{{ form.phone }}</span>)</p>
+                <p id="addr-text">{{ form.address }}</p>
+            </div>
+        </section>
+
+        <section class="cc-card">
+            <h2>Opsi Pengiriman</h2>
+            <div class="pill-row">
+                {% for opt in shipping_options %}
+                <div class="pill">
+                    <input type="radio" name="shipping_method" id="ship-{{ forloop.counter }}"
+                           value="{{ opt.key }}" data-cost="{{ opt.cost }}"
+                           {% if opt.key == form.shipping_method %}checked{% endif %}>
+                    <label for="ship-{{ forloop.counter }}">{{ opt.label }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="cc-card">
+            <h2>Metode Pembayaran</h2>
+            <div class="pill-grid">
+                {% for opt in payment_options %}
+                <div class="pill pill-wide">
+                    <input type="radio" name="payment_method" id="pay-{{ forloop.counter }}"
+                           value="{{ opt.key }}" {% if opt.key == form.payment_method %}checked{% endif %}>
+                    <label for="pay-{{ forloop.counter }}">{{ opt.label }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="cc-card" id="co-summary" data-items-total="{{ items_total }}" data-store-count="{{ store_count }}">
+            <div class="summary-line">
+                <span>Total harga [{{ item_count }} Barang]:</span>
+                <span>Rp. {{ items_total|rupiah }}</span>
+            </div>
+            <div class="summary-line">
+                <span>Total Ongkir ({{ store_count }} toko)</span>
+                <span id="co-shipping">Rp. {{ shipping_cost|rupiah }}</span>
+            </div>
+            <div class="summary-row summary-total">
+                <span>Total :</span>
+                <span id="co-grand">Rp. {{ grand_total|rupiah }}</span>
+            </div>
+            <button type="submit" class="cc-btn">BUAT PESANAN</button>
+        </section>
+
+        <div class="cc-modal" id="addr-modal" hidden>
+            <div class="cc-modal-box" role="dialog" aria-modal="true" aria-labelledby="addr-modal-title">
+                <h2 id="addr-modal-title">Alamat Pengiriman</h2>
+                <div class="co-field">
+                    <label for="f-name">Nama penerima</label>
+                    <input type="text" id="f-name" name="recipient_name" maxlength="100" value="{{ form.recipient_name }}">
+                </div>
+                <div class="co-field">
+                    <label for="f-phone">Nomor telepon</label>
+                    <input type="tel" id="f-phone" name="phone" maxlength="20" value="{{ form.phone }}">
+                </div>
+                <div class="co-field">
+                    <label for="f-address">Alamat lengkap</label>
+                    <textarea id="f-address" name="address" rows="3">{{ form.address }}</textarea>
+                </div>
+                <p class="co-error-text" id="addr-modal-error" hidden>Semua kolom wajib diisi.</p>
+                <div class="cc-modal-actions">
+                    <button type="button" class="cc-modal-cancel" id="addr-cancel">Batal</button>
+                    <button type="button" class="cc-modal-confirm" id="addr-save">Simpan</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</main>
+<script src="{% static 'js/checkout.js' %}?v=1"></script>
+{% endblock content %}

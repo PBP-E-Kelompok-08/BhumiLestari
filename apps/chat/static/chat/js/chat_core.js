@@ -1,6 +1,12 @@
 window.ChatCore = (function () {
     "use strict";
 
+    /**
+     * Mengambil CSRF token untuk autentikasi permintaan POST/PUT/DELETE di Django.
+     * Mencoba membaca dari meta tag <meta name="csrf-token"> terlebih dahulu,
+     * lalu fallback membaca dari cookie 'csrftoken'.
+     * @returns {string} Token CSRF yang valid atau string kosong.
+     */
     function getCsrfToken() {
         var meta = document.querySelector('meta[name="csrf-token"]');
         if (meta && meta.getAttribute("content")) {
@@ -10,6 +16,16 @@ window.ChatCore = (function () {
         return match ? decodeURIComponent(match[1]) : "";
     }
 
+    /**
+     * Pembungkus fetch API terpusat untuk seluruh pemanggilan REST API modul chat.
+     * Secara otomatis menyisipkan header X-CSRFToken, Accept: application/json,
+     * serta Content-Type: application/json jika body berupa objek JavaScript.
+     * 
+     * @param {string} url - URL endpoint yang dituju.
+     * @param {object} [options] - Opsi request fetch (method, headers, body, dll).
+     * @returns {Promise<object>} Data JSON yang dikembalikan oleh server.
+     * @throws {Error} Jika server merespons dengan HTTP status bukan 2xx.
+     */
     async function apiFetch(url, options) {
         var opts = Object.assign({ method: "GET", headers: {} }, options || {});
         opts.headers["X-CSRFToken"] = getCsrfToken();
@@ -37,6 +53,12 @@ window.ChatCore = (function () {
     }
 
     var toastTimer = null;
+    /**
+     * Menampilkan notifikasi melayang (toast notification) di bagian atas layar.
+     * Notifikasi akan otomatis hilang setelah 3.2 detik.
+     * 
+     * @param {string} message - Pesan notifikasi yang akan ditampilkan kepada pengguna.
+     */
     function showToast(message) {
         var toastEl = document.getElementById("chatToast");
         if (!toastEl) return;
@@ -48,6 +70,12 @@ window.ChatCore = (function () {
         }, 3200);
     }
 
+    /**
+     * Sanitasi string terhadap karakter HTML berbahaya untuk mencegah serangan XSS.
+     * 
+     * @param {*} text - Teks atau nilai yang akan disanitasi.
+     * @returns {string} String yang aman untuk diinjeksikan ke dalam innerHTML.
+     */
     function escapeHtml(text) {
         if (text === null || text === undefined) return "";
         return String(text)
@@ -58,6 +86,13 @@ window.ChatCore = (function () {
             .replace(/'/g, "&#039;");
     }
 
+    /**
+     * Mengonversi string waktu ISO 8601 menjadi format jam dan menit 24 jam (HH.MM).
+     * Contoh: "2026-10-27T14:30:00Z" -> "21.30" (sesuai zona waktu lokal pengguna).
+     * 
+     * @param {string} isoStr - String tanggal/waktu ISO 8601.
+     * @returns {string} Format waktu "HH.MM" atau string kosong jika input invalid.
+     */
     function formatTimeHM(isoStr) {
         if (!isoStr) return "";
         try {
@@ -71,6 +106,10 @@ window.ChatCore = (function () {
         }
     }
 
+    /**
+     * Menghasilkan string HTML SVG untuk avatar lingkaran default toko/pengguna.
+     * @returns {string} Markup SVG avatar netral.
+     */
     function getAvatarSvgHtml() {
         return (
             '<div class="chat-avatar-circle" aria-hidden="true">' +
@@ -83,6 +122,10 @@ window.ChatCore = (function () {
         );
     }
 
+    /**
+     * Menghasilkan string HTML SVG ikon arsip (kotak berkas).
+     * @returns {string} Markup SVG ikon arsip.
+     */
     function getArchiveIconSvgHtml() {
         return (
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -94,6 +137,10 @@ window.ChatCore = (function () {
         );
     }
 
+    /**
+     * Membuka modal dialog berdasarkan ID backdrop dan mengarahkan fokus ke input pertama.
+     * @param {string} backdropId - ID elemen backdrop modal (misal 'ratingModalBackdrop').
+     */
     function openModal(backdropId) {
         var el = document.getElementById(backdropId);
         if (!el) return;
@@ -106,11 +153,22 @@ window.ChatCore = (function () {
         }
     }
 
+    /**
+     * Menutup modal dialog berdasarkan ID backdrop.
+     * @param {string} backdropId - ID elemen backdrop modal yang ingin ditutup.
+     */
     function closeModal(backdropId) {
         var el = document.getElementById(backdropId);
         if (el) el.hidden = true;
     }
 
+    /**
+     * Menginisialisasi event handler umum untuk modal dan dropdown:
+     * - Tombol Escape menutup semua modal dan dropdown yang terbuka.
+     * - Klik di luar dialog (pada backdrop) menutup modal.
+     * - Pilihan bintang pada modal rating interaktif.
+     * - Tombol tutup modal silang (×) dan tombol kembali pada tampilan mobile.
+     */
     function initCommonModals() {
         // Escape key closes any open modal or dropdown
         document.addEventListener("keydown", function (e) {
@@ -178,6 +236,13 @@ window.ChatCore = (function () {
                 shell.classList.remove("mobile-thread-active");
             });
         }
+
+        // Reset state mobile saat ukuran layar diperbesar ke desktop (> 768px)
+        window.addEventListener("resize", function () {
+            if (window.innerWidth > 768 && shell) {
+                shell.classList.remove("mobile-thread-active");
+            }
+        });
     }
 
     document.addEventListener("DOMContentLoaded", initCommonModals);

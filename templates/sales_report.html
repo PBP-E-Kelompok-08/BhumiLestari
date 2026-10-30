@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static rupiah %}
 
 {% block meta %}
   <title>Laporan Penjualan - BhumiLestari</title>
@@ -11,14 +11,14 @@
   <h1 class="page-title">Laporan dan Analisis Penjualan</h1>
 
   <nav class="filters" aria-label="Periode laporan">
-    <a href="?periode=mingguan" class="filter">Mingguan</a>
-    <a href="?periode=bulanan" class="filter is-active">Bulanan</a>
+    <a href="?periode=mingguan" class="filter{% if penjualan.periode == 'mingguan' %} is-active{% endif %}">Mingguan</a>
+    <a href="?periode=bulanan" class="filter{% if penjualan.periode == 'bulanan' %} is-active{% endif %}">Bulanan</a>
   </nav>
 
   <div class="stats">
-    <div class="card"><span>Total Pendapatan</span><strong>Rp. 15.003.431</strong></div>
-    <div class="card"><span>Rata - rata Pesanan</span><strong>Rp. 139.783</strong></div>
-    <div class="card"><span>Pertumbuhan</span><strong>+ 9%</strong></div>
+    <div class="card"><span>Total Pendapatan</span><strong>Rp. {{ penjualan.pendapatan|rupiah }}</strong></div>
+    <div class="card"><span>Rata-rata Pesanan</span><strong>Rp. {{ penjualan.rata_pesanan|rupiah }}</strong></div>
+    <div class="card"><span>Pertumbuhan</span><strong>{{ penjualan.pertumbuhan }}</strong></div>
   </div>
 
   <h2 class="section-title">Produk Terlaris</h2>
@@ -33,12 +33,15 @@
         </tr>
       </thead>
       <tbody>
-        <tr><td>Tas Kain Bambi</td><td>68 buah</td><td>Rp.543.013.400</td></tr>
-        <tr><td>Toples Kaca Bamboo Series</td><td>57 buah</td><td>Rp.572.013.440</td></tr>
-        <tr><td>Sabun Batang Lovelyz</td><td>53 buah</td><td>Rp.435.123.455</td></tr>
-        <tr><td>Sikat Gigi Siwak</td><td>52 buah</td><td>Rp.423.444.778</td></tr>
+        {% for produk in penjualan.produk_terlaris %}
+        <tr><td>{{ produk.product_name }}</td><td>{{ produk.terjual }} buah</td><td>Rp. {{ produk.pendapatan|rupiah }}</td></tr>
+        {% empty %}
+        <tr><td colspan="3">Belum ada penjualan selesai pada periode ini.</td></tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% include "reviews/_laporan_ulasan.html" %}
 </div>
 {% endblock content %}

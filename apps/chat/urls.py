@@ -26,6 +26,9 @@ from apps.chat.views import (
     get_broadcast_messages_api,
     send_broadcast_message_api,
     toggle_archive_broadcast_channel_api,
+    toggle_follow_broadcast_channel_api,
+    explore_broadcast_channels_api,
+    add_broadcast_channel_to_list_api,
     search_sellers_api,
 )
 
@@ -72,4 +75,7 @@ urlpatterns = [
     path("chat/api/broadcast/channels/<int:channel_id>/messages/", get_broadcast_messages_api, name="get_broadcast_messages"),
     path("chat/api/broadcast/channels/<int:channel_id>/send/", send_broadcast_message_api, name="send_broadcast_message"),
     path("chat/api/broadcast/channels/<int:channel_id>/archive/", toggle_archive_broadcast_channel_api, name="toggle_archive_broadcast_channel"),
+    path("chat/api/broadcast/channels/<int:channel_id>/follow/", toggle_follow_broadcast_channel_api, name="toggle_follow_broadcast_channel"),
+    path("chat/api/broadcast/channels/explore/", explore_broadcast_channels_api, name="explore_broadcast_channels"),
+    path("chat/api/broadcast/channels/<int:channel_id>/add/", add_broadcast_channel_to_list_api, name="add_broadcast_channel_to_list"),
 ]
