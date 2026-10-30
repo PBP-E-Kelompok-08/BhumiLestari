@@ -77,10 +77,6 @@ Berikut adalah beberapa link Claude yg saya gunakan:
 </ul>
 </div>
 
-### Athifah Mufidah
-
-### Nurfadhil Kurniawan
-
 ### Regina Gunadi
 <div align = "justify">
 AI yang digunakan adalah Claude (free plan) dan AI Overview di Google. Tujuan penggunaannya adalah untuk mempersingkat waktu pembuatan template HTML dan CSS, membantu menjelaskan beberapa hal yang saya tidak pahami dan bingung, serta sebagai teman debugging dan diskusi penerapan best practices. Selain itu, saya juga gunakan untuk membantu memahami kodingan teman yang ditambahkan di beberapa files bagian saya. Strategi prompt yang digunakan adalah berusaha menjelaskan kondisi yang terjadi, lalu ide saya untuk menyelesaikannya dan meminta verifikasi apakah keputusan tersebut sesuai. Untuk beberapa kasus, saya tidak mendapat ide sehingga saya bertanya langsung dan selalu berusaha untuk meminta untuk dijelaskan. Saat mendapat jawaban dari AI, saya membaca dan melakukan filtering per bagian sebelum diimplementasikan ke dalam kode. 
