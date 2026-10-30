@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>Moderasi Ulasan - BhumiLestari</title>
+  <link rel="stylesheet" href="{% static 'css/reviews.css' %}">
+{% endblock meta %}
+
+{% block content %}
+<div class="rv-page">
+  <section class="rv-ulasan rv-moderasi" aria-labelledby="moderasi-heading">
+    <div class="rv-moderasi-head">
+      <div>
+        <h1 id="moderasi-heading" class="rv-heading">Moderasi Ulasan</h1>
+        <p>Tinjau laporan dari penjual sebelum menyembunyikan atau menghapus ulasan.</p>
+      </div>
+      <span class="rv-moderasi-count">{{ jumlah_laporan }} menunggu</span>
+    </div>
+
+    {% if messages %}
+      {% for message in messages %}<p class="rv-info">{{ message }}</p>{% endfor %}
+    {% endif %}
+
+    <div class="rv-list">
+      {% for item in laporan %}
+      <article class="rv-item rv-item-moderasi">
+        <div class="rv-avatar" aria-hidden="true">{{ item.ulasan.pembeli.username|slice:":1" }}</div>
+        <div class="rv-isi">
+          <header class="rv-item-head">
+            <strong>{{ item.ulasan.pembeli.full_name|default:item.ulasan.pembeli.username }}</strong>
+            <time class="rv-waktu">{{ item.created_at|date:"d M Y H:i" }}</time>
+          </header>
+          <p class="rv-meta">
+            <span class="rv-produk">{{ item.ulasan.nama_produk }}</span>
+            <span>{{ item.ulasan.toko.store_name }}</span>
+            <span>{{ item.ulasan.rating }}/5,0</span>
+          </p>
+          {% if item.ulasan.komentar %}<p class="rv-komentar">{{ item.ulasan.komentar }}</p>{% endif %}
+          <div class="rv-laporan-admin">
+            <strong>Alasan laporan dari {{ item.pelapor.username }}</strong>
+            <span>{{ item.alasan }}</span>
+          </div>
+          <form method="post" action="{% url 'reviews:moderasi_laporan' item.pk %}" class="rv-aksi rv-moderasi-aksi">
+            {% csrf_token %}
+            <button class="rv-btn rv-btn-utama" type="submit" name="aksi" value="terima">Terima &amp; Sembunyikan</button>
+            <button class="rv-btn rv-btn-garis" type="submit" name="aksi" value="tolak">Tolak Laporan</button>
+            <button class="rv-btn rv-btn-bahaya" type="submit" name="aksi" value="hapus">Hapus Permanen</button>
+          </form>
+        </div>
+      </article>
+      {% empty %}
+      <div class="rv-state">Tidak ada laporan ulasan yang menunggu ditinjau.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock content %}

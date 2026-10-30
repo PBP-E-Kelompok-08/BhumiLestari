@@ -24,6 +24,11 @@
                 <img class="sidebar-logo" src="{% static 'img/laporan.png' %}" alt="Logo laporan keuangan">
                 Laporan Keuangan</a>
             </li>
+            <li>
+                <a href="{% url 'reviews:moderasi' %}">
+                <img class="sidebar-logo" src="{% static 'img/ringkasan.png' %}" alt="Logo moderasi ulasan">
+                Moderasi Ulasan</a>
+            </li>
 
         {% elif user.role == "seller" %}
             <li>
