@@ -1,5 +1,3 @@
-# AI DISCLOSURE: Test ini dibuat oleh AI untuk mempermudah memastikan apakah backendnya berjalan dgn baik atau tidak
-
 import json
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
