@@ -1,6 +1,3 @@
-# AI Assistance Disclosure:
-# Unit tests di file ini dibuat dengan bantuan Claude (Anthropic).
-
 import json
 
 from django.contrib.auth import get_user_model
