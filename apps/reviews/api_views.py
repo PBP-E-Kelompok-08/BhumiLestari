@@ -13,9 +13,10 @@ from rest_framework.views import APIView
 from apps.users.models import SellerProfile, User
 
 from . import integrations
-from .models import BalasanUlasan, FotoUlasan, UlasanToko
+from .models import BalasanUlasan, FotoUlasan, LaporanUlasan, UlasanToko
 from .serializers import (
     BalasanTulisSerializer,
+    LaporanTulisSerializer,
     UlasanBuatSerializer,
     UlasanEditAPISerializer,
     UlasanPublikSerializer,
@@ -38,6 +39,10 @@ class UlasanPagination(PageNumberPagination):
 
 class BalasanUlasanThrottle(UserRateThrottle):
     rate = "10/min"
+
+
+class LaporanUlasanThrottle(UserRateThrottle):
+    rate = "5/min"
 
 
 class DaftarUlasanTokoAPIView(APIView):
@@ -340,3 +345,46 @@ class BalasanUlasanAPIView(APIView):
             )
         balasan.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LaporanUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [LaporanUlasanThrottle]
+
+    def post(self, request, pk):
+        ulasan = get_object_or_404(
+            UlasanToko.objects.select_related("toko"),
+            pk=pk,
+            disembunyikan=False,
+        )
+        if ulasan.toko.user_id != request.user.id:
+            return Response(
+                {"detail": "Ulasan ini bukan milik toko Anda."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = LaporanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                laporan = LaporanUlasan.objects.create(
+                    ulasan=ulasan,
+                    pelapor=request.user,
+                    alasan=input_serializer.validated_data["alasan"],
+                )
+        except IntegrityError:
+            return Response(
+                {"detail": "Anda sudah melaporkan ulasan ini."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(
+            {
+                "id": laporan.pk,
+                "status": laporan.status,
+                "status_display": laporan.get_status_display(),
+                "alasan": laporan.alasan,
+                "created_at": laporan.created_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )

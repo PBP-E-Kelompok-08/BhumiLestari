@@ -186,3 +186,18 @@ class BalasanTulisSerializer(serializers.Serializer):
             "max_length": "Maksimal 300 karakter.",
         },
     )
+
+
+class LaporanTulisSerializer(serializers.Serializer):
+    alasan = serializers.CharField(
+        min_length=5,
+        max_length=300,
+        allow_blank=False,
+        trim_whitespace=True,
+        error_messages={
+            "required": "Kolom alasan wajib diisi.",
+            "blank": "Kolom alasan wajib diisi.",
+            "min_length": "Alasan minimal 5 karakter.",
+            "max_length": "Maksimal 300 karakter.",
+        },
+    )

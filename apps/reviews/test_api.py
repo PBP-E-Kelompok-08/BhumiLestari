@@ -8,7 +8,7 @@ from django.utils import timezone
 from PIL import Image
 
 from apps.checkout.models import Order, OrderItem
-from .models import BalasanUlasan, FotoUlasan, UlasanToko
+from .models import BalasanUlasan, FotoUlasan, LaporanUlasan, UlasanToko
 from .tests import DasarTest, buat_admin, buat_produk, buat_seller, buat_ulasan, tua
 
 
@@ -497,3 +497,105 @@ class BalasanUlasanAPITest(DasarTest):
         )
 
         self.assertEqual(response.status_code, 404)
+
+
+class LaporanUlasanAPITest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.ulasan = buat_ulasan(self.toko, self.b1, self.produk, 2)
+        self.url = reverse("reviews_api:laporan", args=[self.ulasan.pk])
+        self.client.force_login(self.seller_user)
+
+    def test_pemilik_toko_dapat_melaporkan_ulasan(self):
+        response = self.client.post(
+            self.url,
+            {"alasan": "Komentar mengandung informasi tidak benar"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        laporan = LaporanUlasan.objects.get()
+        self.assertEqual(laporan.pelapor, self.seller_user)
+        self.assertEqual(laporan.status, LaporanUlasan.STATUS_MENUNGGU)
+        self.assertEqual(response.json()["status"], "menunggu")
+
+    def test_guest_ditolak_tanpa_redirect(self):
+        self.client.logout()
+
+        response = self.client.post(
+            self.url,
+            {"alasan": "Komentar tidak sesuai"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Location", response.headers)
+
+    def test_penjual_lain_tidak_dapat_melaporkan(self):
+        user_lain, _ = buat_seller("pelapor-lain", "Toko Pelapor Lain")
+        self.client.force_login(user_lain)
+
+        response = self.client.post(
+            self.url,
+            {"alasan": "Komentar tidak sesuai"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(LaporanUlasan.objects.exists())
+
+    def test_ulasan_disembunyikan_tidak_dapat_dilaporkan(self):
+        self.ulasan.disembunyikan = True
+        self.ulasan.save(update_fields=["disembunyikan"])
+
+        response = self.client.post(
+            self.url,
+            {"alasan": "Komentar tidak sesuai"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_laporan_ganda_menghasilkan_conflict(self):
+        LaporanUlasan.objects.create(
+            ulasan=self.ulasan,
+            pelapor=self.seller_user,
+            alasan="Laporan pertama",
+        )
+
+        response = self.client.post(
+            self.url,
+            {"alasan": "Laporan kedua"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(LaporanUlasan.objects.count(), 1)
+
+    def test_alasan_terlalu_pendek_ditolak(self):
+        response = self.client.post(
+            self.url,
+            {"alasan": "spam"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("alasan", response.json())
+
+    def test_request_keenam_dibatasi_throttle(self):
+        for _ in range(5):
+            response = self.client.post(
+                self.url,
+                {"alasan": "x"},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(
+            self.url,
+            {"alasan": "Alasan yang valid"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 429)

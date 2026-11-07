@@ -5,6 +5,7 @@ from .api_views import (
     DaftarUlasanSayaAPIView,
     DaftarUlasanTokoAPIView,
     DetailUlasanAPIView,
+    LaporanUlasanAPIView,
 )
 
 
@@ -15,4 +16,5 @@ urlpatterns = [
     path("saya/", DaftarUlasanSayaAPIView.as_view(), name="daftar-saya"),
     path("<int:pk>/", DetailUlasanAPIView.as_view(), name="detail"),
     path("<int:pk>/balasan/", BalasanUlasanAPIView.as_view(), name="balasan"),
+    path("<int:pk>/laporan/", LaporanUlasanAPIView.as_view(), name="laporan"),
 ]
