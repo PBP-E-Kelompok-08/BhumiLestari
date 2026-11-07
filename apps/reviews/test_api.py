@@ -1,11 +1,14 @@
 import io
+from datetime import timedelta
 
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from apps.checkout.models import Order, OrderItem
-from .models import FotoUlasan, UlasanToko
+from .models import BalasanUlasan, FotoUlasan, UlasanToko
 from .tests import DasarTest, buat_admin, buat_produk, buat_seller, buat_ulasan, tua
 
 
@@ -360,6 +363,136 @@ class UbahHapusUlasanAPITest(DasarTest):
         response = self.client.patch(
             reverse("reviews_api:detail", args=[999999]),
             {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class BalasanUlasanAPITest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.ulasan = buat_ulasan(self.toko, self.b1, self.produk, 5)
+        self.url = reverse("reviews_api:balasan", args=[self.ulasan.pk])
+        self.client.force_login(self.seller_user)
+
+    def buat_balasan(self, pesan="Terima kasih atas ulasannya"):
+        return BalasanUlasan.objects.create(
+            ulasan=self.ulasan,
+            penjual=self.seller_user,
+            pesan=pesan,
+        )
+
+    def test_pemilik_toko_dapat_membalas(self):
+        response = self.client.post(
+            self.url,
+            {"pesan": "Terima kasih"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(BalasanUlasan.objects.get().pesan, "Terima kasih")
+        self.assertEqual(response.json()["balasan"]["pesan"], "Terima kasih")
+
+    def test_guest_ditolak_tanpa_redirect(self):
+        self.client.logout()
+
+        response = self.client.post(
+            self.url,
+            {"pesan": "Terima kasih"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Location", response.headers)
+
+    def test_penjual_lain_tidak_dapat_membalas(self):
+        user_lain, _ = buat_seller("penjual-lain", "Toko Penjual Lain")
+        self.client.force_login(user_lain)
+
+        response = self.client.post(
+            self.url,
+            {"pesan": "Balasan ilegal"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(BalasanUlasan.objects.exists())
+
+    def test_ulasan_disembunyikan_tidak_dapat_dibalas(self):
+        self.ulasan.disembunyikan = True
+        self.ulasan.save(update_fields=["disembunyikan"])
+
+        response = self.client.post(
+            self.url,
+            {"pesan": "Terima kasih"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_balasan_ganda_menghasilkan_conflict(self):
+        self.buat_balasan()
+
+        response = self.client.post(
+            self.url,
+            {"pesan": "Balasan kedua"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(BalasanUlasan.objects.count(), 1)
+
+    def test_pesan_kosong_ditolak(self):
+        response = self.client.post(
+            self.url,
+            {"pesan": ""},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("pesan", response.json())
+
+    def test_pemilik_toko_dapat_mengedit_balasan(self):
+        balasan = self.buat_balasan("Balasan awal")
+
+        response = self.client.patch(
+            self.url,
+            {"pesan": "Balasan diperbarui"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        balasan.refresh_from_db()
+        self.assertEqual(balasan.pesan, "Balasan diperbarui")
+
+    def test_balasan_lebih_dari_satu_hari_tidak_dapat_diedit(self):
+        balasan = self.buat_balasan()
+        BalasanUlasan.objects.filter(pk=balasan.pk).update(
+            created_at=timezone.now() - timedelta(days=2)
+        )
+
+        response = self.client.patch(
+            self.url,
+            {"pesan": "Terlambat diedit"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_pemilik_toko_dapat_menghapus_balasan(self):
+        self.buat_balasan()
+
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(BalasanUlasan.objects.exists())
+
+    def test_balasan_belum_ada_menghasilkan_not_found(self):
+        response = self.client.patch(
+            self.url,
+            {"pesan": "Belum tersedia"},
             content_type="application/json",
         )
 

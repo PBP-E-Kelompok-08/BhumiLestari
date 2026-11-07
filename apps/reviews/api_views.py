@@ -7,13 +7,19 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from apps.users.models import SellerProfile, User
 
 from . import integrations
-from .models import FotoUlasan, UlasanToko
-from .serializers import UlasanBuatSerializer, UlasanEditAPISerializer, UlasanPublikSerializer
+from .models import BalasanUlasan, FotoUlasan, UlasanToko
+from .serializers import (
+    BalasanTulisSerializer,
+    UlasanBuatSerializer,
+    UlasanEditAPISerializer,
+    UlasanPublikSerializer,
+)
 from .services import ringkasan_toko
 
 
@@ -28,6 +34,10 @@ class UlasanPagination(PageNumberPagination):
     page_size = 5
     page_size_query_param = "page_size"
     max_page_size = 50
+
+
+class BalasanUlasanThrottle(UserRateThrottle):
+    rate = "10/min"
 
 
 class DaftarUlasanTokoAPIView(APIView):
@@ -247,4 +257,86 @@ class DetailUlasanAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         ulasan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class BalasanUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [BalasanUlasanThrottle]
+
+    def get_ulasan(self, request, pk):
+        ulasan = get_object_or_404(
+            UlasanToko.objects.select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto"),
+            pk=pk,
+            disembunyikan=False,
+        )
+        if ulasan.toko.user_id != request.user.id:
+            return None, Response(
+                {"detail": "Ulasan ini bukan milik toko Anda."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return ulasan, None
+
+    def post(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+
+        input_serializer = BalasanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                BalasanUlasan.objects.create(
+                    ulasan=ulasan,
+                    penjual=request.user,
+                    pesan=input_serializer.validated_data["pesan"],
+                )
+        except IntegrityError:
+            return Response(
+                {"detail": "Ulasan ini sudah Anda balas."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        ulasan = self.get_ulasan(request, pk)[0]
+        return Response(
+            UlasanPublikSerializer(ulasan, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def patch(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+        balasan = getattr(ulasan, "balasan", None)
+        if balasan is None:
+            return Response(
+                {"detail": "Belum ada balasan untuk ulasan ini."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not balasan.bisa_diedit():
+            return Response(
+                {"detail": "Balasan hanya dapat diedit dalam 1 hari setelah diposting."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = BalasanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        balasan.pesan = input_serializer.validated_data["pesan"]
+        balasan.save(update_fields=["pesan", "updated_at"])
+
+        ulasan = self.get_ulasan(request, pk)[0]
+        return Response(UlasanPublikSerializer(ulasan, context={"request": request}).data)
+
+    def delete(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+        balasan = getattr(ulasan, "balasan", None)
+        if balasan is None:
+            return Response(
+                {"detail": "Belum ada balasan untuk ulasan ini."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        balasan.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

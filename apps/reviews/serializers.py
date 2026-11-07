@@ -173,3 +173,16 @@ class UlasanEditAPISerializer(serializers.Serializer):
         if not attrs:
             raise serializers.ValidationError("Kirim rating atau komentar yang ingin diubah.")
         return attrs
+
+
+class BalasanTulisSerializer(serializers.Serializer):
+    pesan = serializers.CharField(
+        max_length=300,
+        allow_blank=False,
+        trim_whitespace=True,
+        error_messages={
+            "required": "Kolom pesan wajib diisi.",
+            "blank": "Kolom pesan wajib diisi.",
+            "max_length": "Maksimal 300 karakter.",
+        },
+    )
