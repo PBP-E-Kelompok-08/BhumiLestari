@@ -154,3 +154,22 @@ class UlasanBuatSerializer(serializers.Serializer):
                     "Berkas yang diunggah rusak atau bukan gambar yang valid."
                 ) from exc
         return files
+
+
+class UlasanEditAPISerializer(serializers.Serializer):
+    rating = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=5,
+        error_messages={
+            "invalid": "Rating harus berupa angka 1-5.",
+            "min_value": "Rating harus berupa angka 1-5.",
+            "max_value": "Rating harus berupa angka 1-5.",
+        },
+    )
+    komentar = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Kirim rating atau komentar yang ingin diubah.")
+        return attrs

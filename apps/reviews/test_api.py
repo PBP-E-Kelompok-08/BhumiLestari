@@ -6,7 +6,7 @@ from PIL import Image
 
 from apps.checkout.models import Order, OrderItem
 from .models import FotoUlasan, UlasanToko
-from .tests import DasarTest, buat_produk, buat_seller, buat_ulasan
+from .tests import DasarTest, buat_admin, buat_produk, buat_seller, buat_ulasan, tua
 
 
 class DaftarUlasanTokoAPITest(DasarTest):
@@ -242,3 +242,125 @@ class TambahUlasanAPITest(DasarTest):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("foto", response.json())
+
+
+class UbahHapusUlasanAPITest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        self.ulasan = buat_ulasan(
+            self.toko,
+            self.b1,
+            self.produk,
+            3,
+            komentar="Komentar awal",
+        )
+        self.url = reverse("reviews_api:detail", args=[self.ulasan.pk])
+        self.client.force_login(self.b1)
+
+    def test_pemilik_dapat_mengubah_sebagian_data(self):
+        response = self.client.patch(
+            self.url,
+            {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.ulasan.rating, 5)
+        self.assertEqual(self.ulasan.komentar, "Komentar awal")
+        self.assertTrue(self.ulasan.diedit)
+
+    def test_guest_ditolak_tanpa_redirect(self):
+        self.client.logout()
+
+        response = self.client.patch(
+            self.url,
+            {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Location", response.headers)
+
+    def test_pengguna_lain_tidak_dapat_mengedit(self):
+        self.client.force_login(self.b2)
+
+        response = self.client.patch(
+            self.url,
+            {"komentar": "Diubah orang lain"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.ulasan.komentar, "Komentar awal")
+
+    def test_ulasan_disembunyikan_tidak_dapat_diedit(self):
+        self.ulasan.disembunyikan = True
+        self.ulasan.save(update_fields=["disembunyikan"])
+
+        response = self.client.patch(
+            self.url,
+            {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_ulasan_lebih_dari_tujuh_hari_tidak_dapat_diedit(self):
+        tua(self.ulasan, 8)
+
+        response = self.client.patch(
+            self.url,
+            {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_rating_tidak_valid_ditolak(self):
+        response = self.client.patch(
+            self.url,
+            {"rating": 0},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("rating", response.json())
+
+    def test_payload_kosong_ditolak(self):
+        response = self.client.patch(self.url, {}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("non_field_errors", response.json())
+
+    def test_pemilik_dapat_menghapus_ulasan(self):
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(UlasanToko.objects.filter(pk=self.ulasan.pk).exists())
+
+    def test_pengguna_lain_tidak_dapat_menghapus(self):
+        self.client.force_login(self.b2)
+
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(UlasanToko.objects.filter(pk=self.ulasan.pk).exists())
+
+    def test_admin_dapat_menghapus_ulasan(self):
+        self.client.force_login(buat_admin())
+
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(UlasanToko.objects.filter(pk=self.ulasan.pk).exists())
+
+    def test_ulasan_tidak_ditemukan(self):
+        response = self.client.patch(
+            reverse("reviews_api:detail", args=[999999]),
+            {"rating": 5},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)

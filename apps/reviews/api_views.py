@@ -13,7 +13,7 @@ from apps.users.models import SellerProfile, User
 
 from . import integrations
 from .models import FotoUlasan, UlasanToko
-from .serializers import UlasanBuatSerializer, UlasanPublikSerializer
+from .serializers import UlasanBuatSerializer, UlasanEditAPISerializer, UlasanPublikSerializer
 from .services import ringkasan_toko
 
 
@@ -184,3 +184,67 @@ class DaftarUlasanSayaAPIView(APIView):
                 "ulasan": serializer.data,
             }
         )
+
+
+class DetailUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(
+            UlasanToko.objects.select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto"),
+            pk=pk,
+        )
+
+    def patch(self, request, pk):
+        ulasan = self.get_object(pk)
+        if ulasan.pembeli_id != request.user.id:
+            return Response(
+                {"detail": "Anda hanya dapat mengedit ulasan sendiri."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if ulasan.disembunyikan:
+            return Response(
+                {"detail": "Ulasan yang disembunyikan tidak dapat diedit."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not ulasan.bisa_diedit():
+            return Response(
+                {"detail": "Ulasan hanya dapat diedit dalam 7 hari setelah diposting."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = UlasanEditAPISerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+
+        update_fields = ["diedit", "updated_at"]
+        if "rating" in data:
+            ulasan.rating = data["rating"]
+            update_fields.append("rating")
+        if "komentar" in data:
+            ulasan.komentar = data["komentar"]
+            update_fields.append("komentar")
+        ulasan.diedit = True
+        ulasan.save(update_fields=update_fields)
+
+        output_serializer = UlasanPublikSerializer(
+            ulasan,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "ulasan": output_serializer.data,
+                "ringkasan": ringkasan_toko(ulasan.toko_id),
+            }
+        )
+
+    def delete(self, request, pk):
+        ulasan = self.get_object(pk)
+        if ulasan.pembeli_id != request.user.id and not request.user.is_staff:
+            return Response(
+                {"detail": "Anda hanya dapat menghapus ulasan sendiri."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        ulasan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
