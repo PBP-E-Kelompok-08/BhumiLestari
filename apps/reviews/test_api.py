@@ -1,8 +1,12 @@
+import io
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from PIL import Image
 
-from .models import FotoUlasan
-from .tests import DasarTest, buat_produk, buat_ulasan
+from apps.checkout.models import Order, OrderItem
+from .models import FotoUlasan, UlasanToko
+from .tests import DasarTest, buat_produk, buat_seller, buat_ulasan
 
 
 class DaftarUlasanTokoAPITest(DasarTest):
@@ -119,3 +123,122 @@ class DaftarUlasanSayaAPITest(DasarTest):
         self.assertEqual(data["count"], 2)
         self.assertEqual(len(data["ulasan"]), 1)
         self.assertIsNotNone(data["next"])
+
+
+class TambahUlasanAPITest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("reviews_api:daftar-toko", args=[self.toko.id])
+        self.client.force_login(self.b1)
+        self.order = Order.objects.create(
+            buyer=self.b1,
+            seller=self.toko,
+            store_name=self.toko.store_name,
+            recipient_name="Budi",
+            phone="08123456789",
+            shipping_address="Bandung",
+            status="selesai",
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.produk,
+            product_name=self.produk.name,
+            price=10000,
+            quantity=1,
+        )
+
+    def payload(self, **perubahan):
+        data = {
+            "produk_id": str(self.produk.pk),
+            "rating": 5,
+            "komentar": "Produk sangat bagus",
+        }
+        data.update(perubahan)
+        return data
+
+    def test_pembeli_dapat_membuat_ulasan(self):
+        response = self.client.post(self.url, self.payload(), content_type="application/json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(UlasanToko.objects.count(), 1)
+        ulasan = UlasanToko.objects.get()
+        self.assertEqual(ulasan.pembeli, self.b1)
+        self.assertEqual(ulasan.produk, self.produk)
+        self.assertEqual(response.json()["ulasan"]["produk"]["id"], str(self.produk.pk))
+
+    def test_guest_ditolak_tanpa_redirect(self):
+        self.client.logout()
+
+        response = self.client.post(self.url, self.payload(), content_type="application/json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Location", response.headers)
+
+    def test_penjual_tidak_dapat_membuat_ulasan(self):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.post(self.url, self.payload(), content_type="application/json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(UlasanToko.objects.exists())
+
+    def test_pembelian_yang_belum_selesai_ditolak(self):
+        self.order.status = "diproses"
+        self.order.save(update_fields=["status"])
+
+        response = self.client.post(self.url, self.payload(), content_type="application/json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(UlasanToko.objects.exists())
+
+    def test_produk_toko_lain_ditolak(self):
+        _, toko_lain = buat_seller("seller-lain", "Toko Lain")
+        produk_lain = buat_produk(toko_lain, "Produk Toko Lain")
+
+        response = self.client.post(
+            self.url,
+            self.payload(produk_id=str(produk_lain.pk)),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(UlasanToko.objects.exists())
+
+    def test_ulasan_ganda_menghasilkan_conflict(self):
+        self.assertEqual(
+            self.client.post(self.url, self.payload(), content_type="application/json").status_code,
+            201,
+        )
+
+        response = self.client.post(self.url, self.payload(), content_type="application/json")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(UlasanToko.objects.count(), 1)
+
+    def test_rating_tidak_valid_ditolak_serializer(self):
+        response = self.client.post(
+            self.url,
+            self.payload(rating=6),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("rating", response.json())
+
+    def test_foto_valid_disimpan(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (1, 1), (255, 255, 255)).save(buffer, format="PNG")
+        foto = SimpleUploadedFile("foto.png", buffer.getvalue(), content_type="image/png")
+
+        response = self.client.post(self.url, self.payload(foto=[foto]))
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(FotoUlasan.objects.count(), 1)
+
+    def test_foto_palsu_ditolak(self):
+        foto = SimpleUploadedFile("foto.png", b"bukan-gambar", content_type="image/png")
+
+        response = self.client.post(self.url, self.payload(foto=[foto]))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("foto", response.json())

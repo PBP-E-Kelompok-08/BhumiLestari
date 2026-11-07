@@ -1,5 +1,7 @@
+from PIL import Image
 from rest_framework import serializers
 
+from .forms import MAKS_FOTO, MAKS_UKURAN_FOTO, TIPE_FOTO
 from .models import UlasanToko
 
 
@@ -109,3 +111,46 @@ class UlasanPublikSerializer(serializers.ModelSerializer):
 
     def get_bisa_dihapus(self, ulasan):
         return self.get_milik_saya(ulasan)
+
+
+class UlasanBuatSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(
+        min_value=1,
+        max_value=5,
+        error_messages={
+            "required": "Rating wajib diisi.",
+            "invalid": "Rating harus berupa angka 1-5.",
+            "min_value": "Rating harus berupa angka 1-5.",
+            "max_value": "Rating harus berupa angka 1-5.",
+        },
+    )
+    komentar = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    produk_id = serializers.UUIDField(
+        error_messages={
+            "required": "Pilih produk yang ingin diulas.",
+            "invalid": "Pilih produk yang ingin diulas.",
+        }
+    )
+    foto = serializers.ListField(
+        child=serializers.FileField(),
+        required=False,
+        allow_empty=True,
+        max_length=MAKS_FOTO,
+    )
+
+    def validate_foto(self, files):
+        for file in files:
+            if getattr(file, "content_type", None) not in TIPE_FOTO:
+                raise serializers.ValidationError("Format foto harus JPG, PNG, atau WEBP.")
+            if file.size > MAKS_UKURAN_FOTO:
+                raise serializers.ValidationError("Ukuran tiap foto maksimal 2 MB.")
+            try:
+                file.seek(0)
+                image = Image.open(file)
+                image.verify()
+                file.seek(0)
+            except Exception as exc:
+                raise serializers.ValidationError(
+                    "Berkas yang diunggah rusak atau bukan gambar yang valid."
+                ) from exc
+        return files
