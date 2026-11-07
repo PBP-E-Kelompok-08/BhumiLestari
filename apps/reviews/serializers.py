@@ -2,7 +2,7 @@ from PIL import Image
 from rest_framework import serializers
 
 from .forms import MAKS_FOTO, MAKS_UKURAN_FOTO, TIPE_FOTO
-from .models import UlasanToko
+from .models import LaporanUlasan, UlasanToko
 
 
 def _nama_pengguna(user):
@@ -110,7 +110,12 @@ class UlasanPublikSerializer(serializers.ModelSerializer):
         return self.get_milik_saya(ulasan) and not ulasan.disembunyikan and ulasan.bisa_diedit()
 
     def get_bisa_dihapus(self, ulasan):
-        return self.get_milik_saya(ulasan)
+        user = self._user()
+        return bool(
+            user
+            and user.is_authenticated
+            and (ulasan.pembeli_id == user.id or user.is_staff)
+        )
 
 
 class UlasanBuatSerializer(serializers.Serializer):
@@ -199,5 +204,40 @@ class LaporanTulisSerializer(serializers.Serializer):
             "blank": "Kolom alasan wajib diisi.",
             "min_length": "Alasan minimal 5 karakter.",
             "max_length": "Maksimal 300 karakter.",
+        },
+    )
+
+
+class LaporanModerasiSerializer(serializers.ModelSerializer):
+    pelapor = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    ulasan = UlasanPublikSerializer(read_only=True)
+
+    class Meta:
+        model = LaporanUlasan
+        fields = [
+            "id",
+            "pelapor",
+            "alasan",
+            "status",
+            "status_display",
+            "created_at",
+            "ulasan",
+        ]
+        read_only_fields = fields
+
+    def get_pelapor(self, laporan):
+        return {
+            "id": laporan.pelapor_id,
+            "nama": _nama_pengguna(laporan.pelapor),
+        }
+
+
+class AksiModerasiSerializer(serializers.Serializer):
+    aksi = serializers.ChoiceField(
+        choices=["terima", "tolak", "hapus"],
+        error_messages={
+            "required": "Aksi moderasi wajib diisi.",
+            "invalid_choice": "Aksi moderasi tidak valid.",
         },
     )

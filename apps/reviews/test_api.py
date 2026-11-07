@@ -599,3 +599,108 @@ class LaporanUlasanAPITest(DasarTest):
         )
 
         self.assertEqual(response.status_code, 429)
+
+
+class ModerasiLaporanAPITest(DasarTest):
+    def setUp(self):
+        super().setUp()
+        self.admin = buat_admin()
+        self.ulasan = buat_ulasan(self.toko, self.b1, self.produk, 1)
+        self.laporan = LaporanUlasan.objects.create(
+            ulasan=self.ulasan,
+            pelapor=self.seller_user,
+            alasan="Komentar mengandung informasi tidak benar",
+        )
+        self.list_url = reverse("reviews_api:daftar-laporan")
+        self.detail_url = reverse("reviews_api:detail-laporan", args=[self.laporan.pk])
+        self.client.force_login(self.admin)
+
+    def test_admin_melihat_antrean_laporan(self):
+        produk_lain = buat_produk(self.toko, "Produk Moderasi Lain")
+        ulasan_lain = buat_ulasan(self.toko, self.b2, produk_lain, 3)
+        LaporanUlasan.objects.create(
+            ulasan=ulasan_lain,
+            pelapor=self.seller_user,
+            alasan="Laporan yang sudah ditolak",
+            status=LaporanUlasan.STATUS_DITOLAK,
+        )
+
+        data = self.client.get(self.list_url).json()
+
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["laporan"][0]["id"], self.laporan.pk)
+        self.assertEqual(data["laporan"][0]["ulasan"]["id"], self.ulasan.pk)
+
+    def test_guest_dan_non_admin_ditolak(self):
+        self.client.logout()
+        response_guest = self.client.get(self.list_url)
+        self.client.force_login(self.b1)
+        response_buyer = self.client.get(self.list_url)
+
+        self.assertEqual(response_guest.status_code, 403)
+        self.assertEqual(response_buyer.status_code, 403)
+        self.assertNotIn("Location", response_guest.headers)
+
+    def test_admin_menerima_laporan_dan_menyembunyikan_ulasan(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"aksi": "terima"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.laporan.refresh_from_db()
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.laporan.status, LaporanUlasan.STATUS_DITERIMA)
+        self.assertTrue(self.ulasan.disembunyikan)
+
+    def test_admin_menolak_laporan(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"aksi": "tolak"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.laporan.refresh_from_db()
+        self.ulasan.refresh_from_db()
+        self.assertEqual(self.laporan.status, LaporanUlasan.STATUS_DITOLAK)
+        self.assertFalse(self.ulasan.disembunyikan)
+
+    def test_admin_menghapus_ulasan_dan_laporan(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"aksi": "hapus"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(UlasanToko.objects.filter(pk=self.ulasan.pk).exists())
+        self.assertFalse(LaporanUlasan.objects.filter(pk=self.laporan.pk).exists())
+
+    def test_aksi_tidak_valid_ditolak(self):
+        response = self.client.patch(
+            self.detail_url,
+            {"aksi": "abaikan"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("aksi", response.json())
+
+    def test_laporan_yang_sudah_ditinjau_menghasilkan_conflict(self):
+        self.laporan.status = LaporanUlasan.STATUS_DITOLAK
+        self.laporan.save(update_fields=["status"])
+
+        response = self.client.patch(
+            self.detail_url,
+            {"aksi": "terima"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_status_filter_tidak_valid_ditolak(self):
+        response = self.client.get(self.list_url, {"status": "tidak-valid"})
+
+        self.assertEqual(response.status_code, 400)

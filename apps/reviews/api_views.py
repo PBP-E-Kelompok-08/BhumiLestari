@@ -4,7 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.throttling import UserRateThrottle
@@ -15,7 +15,9 @@ from apps.users.models import SellerProfile, User
 from . import integrations
 from .models import BalasanUlasan, FotoUlasan, LaporanUlasan, UlasanToko
 from .serializers import (
+    AksiModerasiSerializer,
     BalasanTulisSerializer,
+    LaporanModerasiSerializer,
     LaporanTulisSerializer,
     UlasanBuatSerializer,
     UlasanEditAPISerializer,
@@ -387,4 +389,93 @@ class LaporanUlasanAPIView(APIView):
                 "created_at": laporan.created_at,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class DaftarLaporanModerasiAPIView(APIView):
+    permission_classes = [IsAdminUser]
+    pagination_class = UlasanPagination
+
+    def get(self, request):
+        queryset = (
+            LaporanUlasan.objects.select_related(
+                "pelapor",
+                "ulasan__pembeli",
+                "ulasan__toko",
+                "ulasan__produk",
+                "ulasan__balasan",
+            )
+            .prefetch_related("ulasan__foto")
+            .order_by("-created_at")
+        )
+        filter_status = request.query_params.get("status", LaporanUlasan.STATUS_MENUNGGU)
+        if filter_status != "semua":
+            status_valid = {pilihan[0] for pilihan in LaporanUlasan.CHOICE_STATUS}
+            if filter_status not in status_valid:
+                return Response(
+                    {"detail": "Status laporan tidak valid."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(status=filter_status)
+
+        paginator = self.pagination_class()
+        halaman = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = LaporanModerasiSerializer(
+            halaman,
+            many=True,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "laporan": serializer.data,
+            }
+        )
+
+
+class DetailLaporanModerasiAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        input_serializer = AksiModerasiSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        aksi = input_serializer.validated_data["aksi"]
+
+        with transaction.atomic():
+            laporan = get_object_or_404(
+                LaporanUlasan.objects.select_for_update().select_related("ulasan"),
+                pk=pk,
+            )
+            if laporan.status != LaporanUlasan.STATUS_MENUNGGU:
+                return Response(
+                    {"detail": "Laporan ini sudah pernah ditinjau."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if aksi == "hapus":
+                laporan.ulasan.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            if aksi == "terima":
+                laporan.ulasan.disembunyikan = True
+                laporan.ulasan.save(update_fields=["disembunyikan"])
+                laporan.status = LaporanUlasan.STATUS_DITERIMA
+            else:
+                laporan.status = LaporanUlasan.STATUS_DITOLAK
+            laporan.save(update_fields=["status"])
+
+        laporan = (
+            LaporanUlasan.objects.select_related(
+                "pelapor",
+                "ulasan__pembeli",
+                "ulasan__toko",
+                "ulasan__produk",
+                "ulasan__balasan",
+            )
+            .prefetch_related("ulasan__foto")
+            .get(pk=pk)
+        )
+        return Response(
+            LaporanModerasiSerializer(laporan, context={"request": request}).data
         )
