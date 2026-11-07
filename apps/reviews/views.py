@@ -332,6 +332,8 @@ def edit_ulasan(request, pk):
     ulasan = get_object_or_404(_qs_ulasan(), pk=pk)
     if ulasan.pembeli_id != request.user.id:
         return _err("Anda hanya dapat mengedit ulasan sendiri.", 403)
+    if ulasan.disembunyikan:
+        return _err("Ulasan yang disembunyikan tidak dapat diedit.", 403)
     if not ulasan.bisa_diedit():
         return _err("Ulasan hanya dapat diedit dalam 7 hari setelah diposting.", 403)
 
