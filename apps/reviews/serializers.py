@@ -24,6 +24,7 @@ class UlasanPublikSerializer(serializers.ModelSerializer):
     balasan = serializers.SerializerMethodField()
     milik_saya = serializers.SerializerMethodField()
     bisa_diedit = serializers.SerializerMethodField()
+    bisa_dihapus = serializers.SerializerMethodField()
 
     class Meta:
         model = UlasanToko
@@ -43,6 +44,8 @@ class UlasanPublikSerializer(serializers.ModelSerializer):
             "balasan",
             "milik_saya",
             "bisa_diedit",
+            "bisa_dihapus",
+            "disembunyikan",
         ]
         read_only_fields = fields
 
@@ -103,3 +106,6 @@ class UlasanPublikSerializer(serializers.ModelSerializer):
 
     def get_bisa_diedit(self, ulasan):
         return self.get_milik_saya(ulasan) and not ulasan.disembunyikan and ulasan.bisa_diedit()
+
+    def get_bisa_dihapus(self, ulasan):
+        return self.get_milik_saya(ulasan)

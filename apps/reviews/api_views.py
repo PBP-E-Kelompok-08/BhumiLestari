@@ -3,7 +3,7 @@ import uuid
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -72,6 +72,36 @@ class DaftarUlasanTokoAPIView(APIView):
             {
                 "toko": {"id": toko.id, "nama": toko.store_name},
                 "ringkasan": ringkasan_toko(toko.id),
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "ulasan": serializer.data,
+            }
+        )
+
+
+class DaftarUlasanSayaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = UlasanPagination
+
+    def get(self, request):
+        queryset = (
+            UlasanToko.objects.filter(pembeli=request.user)
+            .select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto")
+            .order_by("-created_at")
+        )
+
+        paginator = self.pagination_class()
+        halaman = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = UlasanPublikSerializer(
+            halaman,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(
+            {
                 "count": paginator.page.paginator.count,
                 "next": paginator.get_next_link(),
                 "previous": paginator.get_previous_link(),
