@@ -394,6 +394,31 @@ class TambahUlasanUUIDTest(DasarTest):
         self.assertIsNone(r.json()["ringkasan_produk"])
 
 
+class EditUlasanTest(DasarTest):
+    def test_pembeli_tidak_dapat_mengedit_ulasan_yang_disembunyikan(self):
+        ulasan = buat_ulasan(
+            self.toko,
+            self.b1,
+            self.produk,
+            2,
+            komentar="Komentar awal",
+            disembunyikan=True,
+        )
+        self.client.force_login(self.b1)
+
+        response = self.client.post(
+            reverse("reviews:edit", args=[ulasan.pk]),
+            {"rating": "5", "komentar": "Komentar pengganti"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"], "Ulasan yang disembunyikan tidak dapat diedit.")
+        ulasan.refresh_from_db()
+        self.assertEqual(ulasan.rating, 2)
+        self.assertEqual(ulasan.komentar, "Komentar awal")
+        self.assertFalse(ulasan.diedit)
+
+
 class IntegrasiTest(DasarTest):
     def test_ambil_produk(self):
         self.assertEqual(

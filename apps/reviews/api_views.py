@@ -1,0 +1,481 @@
+import uuid
+
+from django.db import IntegrityError, transaction
+from django.db.models import Count
+from django.shortcuts import get_object_or_404
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
+
+from apps.users.models import SellerProfile, User
+
+from . import integrations
+from .models import BalasanUlasan, FotoUlasan, LaporanUlasan, UlasanToko
+from .serializers import (
+    AksiModerasiSerializer,
+    BalasanTulisSerializer,
+    LaporanModerasiSerializer,
+    LaporanTulisSerializer,
+    UlasanBuatSerializer,
+    UlasanEditAPISerializer,
+    UlasanPublikSerializer,
+)
+from .services import ringkasan_toko
+
+
+URUTAN = {
+    "terbaru": ("-created_at",),
+    "tertinggi": ("-rating", "-created_at"),
+    "terendah": ("rating", "-created_at"),
+}
+
+
+class UlasanPagination(PageNumberPagination):
+    page_size = 5
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+class BalasanUlasanThrottle(UserRateThrottle):
+    rate = "10/min"
+
+
+class LaporanUlasanThrottle(UserRateThrottle):
+    rate = "5/min"
+
+
+class DaftarUlasanTokoAPIView(APIView):
+    permission_classes = [AllowAny]
+    pagination_class = UlasanPagination
+
+    def get_permissions(self):
+        permission_classes = [IsAuthenticated] if self.request.method == "POST" else [AllowAny]
+        return [permission() for permission in permission_classes]
+
+    def get(self, request, toko_id):
+        toko = get_object_or_404(SellerProfile, pk=toko_id)
+        queryset = (
+            UlasanToko.objects.tampil()
+            .filter(toko=toko)
+            .select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto")
+        )
+
+        rating = request.query_params.get("rating")
+        if rating in {"1", "2", "3", "4", "5"}:
+            queryset = queryset.filter(rating=int(rating))
+        if request.query_params.get("foto") == "1":
+            queryset = queryset.annotate(jumlah_foto_db=Count("foto")).filter(jumlah_foto_db__gt=0)
+
+        produk = request.query_params.get("produk")
+        try:
+            produk_id = uuid.UUID(produk) if produk else None
+        except (TypeError, ValueError):
+            produk_id = None
+        if produk_id:
+            queryset = queryset.filter(produk_id=produk_id)
+
+        if request.query_params.get("terverifikasi") == "1":
+            queryset = queryset.filter(produk__status="verified")
+
+        urutan = request.query_params.get("urut", "terbaru")
+        queryset = queryset.order_by(*URUTAN.get(urutan, URUTAN["terbaru"]))
+
+        paginator = self.pagination_class()
+        halaman = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = UlasanPublikSerializer(
+            halaman,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(
+            {
+                "toko": {"id": toko.id, "nama": toko.store_name},
+                "ringkasan": ringkasan_toko(toko.id),
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "ulasan": serializer.data,
+            }
+        )
+
+    def post(self, request, toko_id):
+        toko = get_object_or_404(SellerProfile, pk=toko_id)
+        if request.user.role != User.ROLE_BUYER:
+            return Response(
+                {"detail": "Hanya pembeli yang dapat menulis ulasan."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if toko.user_id == request.user.id:
+            return Response(
+                {"detail": "Anda tidak dapat mengulas toko sendiri."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = UlasanBuatSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+
+        info_produk = integrations.ambil_produk(data["produk_id"])
+        if info_produk is None:
+            return Response(
+                {"detail": "Produk tidak ditemukan."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if info_produk["toko_id"] != toko.id:
+            return Response(
+                {"detail": "Produk ini bukan milik toko tersebut."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not integrations.pernah_membeli(request.user, data["produk_id"]):
+            return Response(
+                {"detail": "Anda hanya dapat mengulas produk yang pernah Anda beli."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            with transaction.atomic():
+                ulasan = UlasanToko.objects.create(
+                    toko=toko,
+                    pembeli=request.user,
+                    produk_id=data["produk_id"],
+                    nama_produk=info_produk["nama"],
+                    rating=data["rating"],
+                    komentar=data.get("komentar", ""),
+                )
+                for foto in data.get("foto", []):
+                    FotoUlasan.objects.create(ulasan=ulasan, gambar=foto)
+        except IntegrityError:
+            return Response(
+                {"detail": "Anda sudah mengulas produk ini."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        ulasan = (
+            UlasanToko.objects.select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto")
+            .get(pk=ulasan.pk)
+        )
+        output_serializer = UlasanPublikSerializer(
+            ulasan,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "ulasan": output_serializer.data,
+                "ringkasan": ringkasan_toko(toko.id),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DaftarUlasanSayaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = UlasanPagination
+
+    def get(self, request):
+        queryset = (
+            UlasanToko.objects.filter(pembeli=request.user)
+            .select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto")
+            .order_by("-created_at")
+        )
+
+        paginator = self.pagination_class()
+        halaman = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = UlasanPublikSerializer(
+            halaman,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(
+            {
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "ulasan": serializer.data,
+            }
+        )
+
+
+class DetailUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(
+            UlasanToko.objects.select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto"),
+            pk=pk,
+        )
+
+    def patch(self, request, pk):
+        ulasan = self.get_object(pk)
+        if ulasan.pembeli_id != request.user.id:
+            return Response(
+                {"detail": "Anda hanya dapat mengedit ulasan sendiri."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if ulasan.disembunyikan:
+            return Response(
+                {"detail": "Ulasan yang disembunyikan tidak dapat diedit."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not ulasan.bisa_diedit():
+            return Response(
+                {"detail": "Ulasan hanya dapat diedit dalam 7 hari setelah diposting."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = UlasanEditAPISerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+
+        update_fields = ["diedit", "updated_at"]
+        if "rating" in data:
+            ulasan.rating = data["rating"]
+            update_fields.append("rating")
+        if "komentar" in data:
+            ulasan.komentar = data["komentar"]
+            update_fields.append("komentar")
+        ulasan.diedit = True
+        ulasan.save(update_fields=update_fields)
+
+        output_serializer = UlasanPublikSerializer(
+            ulasan,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "ulasan": output_serializer.data,
+                "ringkasan": ringkasan_toko(ulasan.toko_id),
+            }
+        )
+
+    def delete(self, request, pk):
+        ulasan = self.get_object(pk)
+        if ulasan.pembeli_id != request.user.id and not request.user.is_staff:
+            return Response(
+                {"detail": "Anda hanya dapat menghapus ulasan sendiri."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        ulasan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class BalasanUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [BalasanUlasanThrottle]
+
+    def get_ulasan(self, request, pk):
+        ulasan = get_object_or_404(
+            UlasanToko.objects.select_related("pembeli", "toko", "produk", "balasan")
+            .prefetch_related("foto"),
+            pk=pk,
+            disembunyikan=False,
+        )
+        if ulasan.toko.user_id != request.user.id:
+            return None, Response(
+                {"detail": "Ulasan ini bukan milik toko Anda."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return ulasan, None
+
+    def post(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+
+        input_serializer = BalasanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                BalasanUlasan.objects.create(
+                    ulasan=ulasan,
+                    penjual=request.user,
+                    pesan=input_serializer.validated_data["pesan"],
+                )
+        except IntegrityError:
+            return Response(
+                {"detail": "Ulasan ini sudah Anda balas."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        ulasan = self.get_ulasan(request, pk)[0]
+        return Response(
+            UlasanPublikSerializer(ulasan, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def patch(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+        balasan = getattr(ulasan, "balasan", None)
+        if balasan is None:
+            return Response(
+                {"detail": "Belum ada balasan untuk ulasan ini."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not balasan.bisa_diedit():
+            return Response(
+                {"detail": "Balasan hanya dapat diedit dalam 1 hari setelah diposting."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = BalasanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        balasan.pesan = input_serializer.validated_data["pesan"]
+        balasan.save(update_fields=["pesan", "updated_at"])
+
+        ulasan = self.get_ulasan(request, pk)[0]
+        return Response(UlasanPublikSerializer(ulasan, context={"request": request}).data)
+
+    def delete(self, request, pk):
+        ulasan, error = self.get_ulasan(request, pk)
+        if error:
+            return error
+        balasan = getattr(ulasan, "balasan", None)
+        if balasan is None:
+            return Response(
+                {"detail": "Belum ada balasan untuk ulasan ini."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        balasan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LaporanUlasanAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [LaporanUlasanThrottle]
+
+    def post(self, request, pk):
+        ulasan = get_object_or_404(
+            UlasanToko.objects.select_related("toko"),
+            pk=pk,
+            disembunyikan=False,
+        )
+        if ulasan.toko.user_id != request.user.id:
+            return Response(
+                {"detail": "Ulasan ini bukan milik toko Anda."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        input_serializer = LaporanTulisSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                laporan = LaporanUlasan.objects.create(
+                    ulasan=ulasan,
+                    pelapor=request.user,
+                    alasan=input_serializer.validated_data["alasan"],
+                )
+        except IntegrityError:
+            return Response(
+                {"detail": "Anda sudah melaporkan ulasan ini."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(
+            {
+                "id": laporan.pk,
+                "status": laporan.status,
+                "status_display": laporan.get_status_display(),
+                "alasan": laporan.alasan,
+                "created_at": laporan.created_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DaftarLaporanModerasiAPIView(APIView):
+    permission_classes = [IsAdminUser]
+    pagination_class = UlasanPagination
+
+    def get(self, request):
+        queryset = (
+            LaporanUlasan.objects.select_related(
+                "pelapor",
+                "ulasan__pembeli",
+                "ulasan__toko",
+                "ulasan__produk",
+                "ulasan__balasan",
+            )
+            .prefetch_related("ulasan__foto")
+            .order_by("-created_at")
+        )
+        filter_status = request.query_params.get("status", LaporanUlasan.STATUS_MENUNGGU)
+        if filter_status != "semua":
+            status_valid = {pilihan[0] for pilihan in LaporanUlasan.CHOICE_STATUS}
+            if filter_status not in status_valid:
+                return Response(
+                    {"detail": "Status laporan tidak valid."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(status=filter_status)
+
+        paginator = self.pagination_class()
+        halaman = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = LaporanModerasiSerializer(
+            halaman,
+            many=True,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "laporan": serializer.data,
+            }
+        )
+
+
+class DetailLaporanModerasiAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        input_serializer = AksiModerasiSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        aksi = input_serializer.validated_data["aksi"]
+
+        with transaction.atomic():
+            laporan = get_object_or_404(
+                LaporanUlasan.objects.select_for_update().select_related("ulasan"),
+                pk=pk,
+            )
+            if laporan.status != LaporanUlasan.STATUS_MENUNGGU:
+                return Response(
+                    {"detail": "Laporan ini sudah pernah ditinjau."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if aksi == "hapus":
+                laporan.ulasan.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            if aksi == "terima":
+                laporan.ulasan.disembunyikan = True
+                laporan.ulasan.save(update_fields=["disembunyikan"])
+                laporan.status = LaporanUlasan.STATUS_DITERIMA
+            else:
+                laporan.status = LaporanUlasan.STATUS_DITOLAK
+            laporan.save(update_fields=["status"])
+
+        laporan = (
+            LaporanUlasan.objects.select_related(
+                "pelapor",
+                "ulasan__pembeli",
+                "ulasan__toko",
+                "ulasan__produk",
+                "ulasan__balasan",
+            )
+            .prefetch_related("ulasan__foto")
+            .get(pk=pk)
+        )
+        return Response(
+            LaporanModerasiSerializer(laporan, context={"request": request}).data
+        )
