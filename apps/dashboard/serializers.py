@@ -25,3 +25,21 @@ class SellerSummarySerializer(serializers.Serializer):
     reviews = serializers.DictField()
     revenue_chart = RevenueChartSerializer(many=True)
     best_selling_products = BestSellingProductSerializer(many=True)
+
+
+class SalesReportQuerySerializer(serializers.Serializer):
+    period = serializers.ChoiceField(
+        choices=["mingguan", "bulanan"],
+        default="bulanan",
+        required=False,
+    )
+
+
+class SalesReportSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["seller", "admin"])
+    period = serializers.ChoiceField(choices=["mingguan", "bulanan"])
+    revenue = serializers.IntegerField()
+    average_order_value = serializers.IntegerField()
+    growth = serializers.CharField()
+    best_selling_products = BestSellingProductSerializer(many=True)
+    reviews = serializers.DictField()
