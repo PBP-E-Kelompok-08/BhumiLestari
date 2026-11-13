@@ -10,3 +10,14 @@ class IsBuyer(BasePermission):
             user.is_authenticated
             and getattr(user, "role", None) == "buyer"
         )
+
+
+class IsBuyerOrSeller(BasePermission):
+    message = "Endpoint ini hanya dapat digunakan oleh buyer atau seller."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user.is_authenticated
+            and getattr(user, "role", None) in {"buyer", "seller"}
+        )

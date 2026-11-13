@@ -3,7 +3,7 @@ import json
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.utils import timezone
@@ -316,12 +316,16 @@ STATUS_VIEW = {
 
 def _role_orders(user):
     """Buyer: pesanan miliknya. Seller: pesanan yang berisi produk tokonya."""
-    qs = Order.objects.select_related("buyer").prefetch_related("items__product__seller")
+    qs = Order.objects.select_related("buyer", "seller__user").prefetch_related(
+        "items__product__seller__user"
+    )
     role = getattr(user, "role", None)
     if role == "buyer":
         return qs.filter(buyer=user)
     if role == "seller":
-        return qs.filter(items__product__seller__user=user).distinct()
+        return qs.filter(
+            Q(seller__user=user) | Q(items__product__seller__user=user)
+        ).distinct()
     return None
 
 
@@ -329,7 +333,12 @@ def _visible_items(order, user):
     """Seller hanya melihat barang dari tokonya sendiri."""
     items = list(order.items.all())
     if getattr(user, "role", None) == "seller":
-        items = [i for i in items if i.product and i.product.seller.user_id == user.id]
+        if not order.seller_id or order.seller.user_id != user.id:
+            items = [
+                item
+                for item in items
+                if item.product and item.product.seller.user_id == user.id
+            ]
     return items
 
 

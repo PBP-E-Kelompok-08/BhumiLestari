@@ -259,7 +259,7 @@ class CheckoutCreateAPITest(TestCase):
             is_selected=True,
         )
         self.summary_url = reverse("checkout_api:summary")
-        self.create_url = reverse("checkout_api:order-create")
+        self.create_url = reverse("checkout_api:orders")
         self.valid_payload = {
             "recipient_name": "Budi Lestari",
             "phone": "08123456789",
@@ -400,3 +400,217 @@ class CheckoutCreateAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("tidak tersedia", response.json()["detail"])
         self.assertEqual(Order.objects.count(), 0)
+
+
+@override_settings(
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+)
+class OrderHistoryAPITest(TestCase):
+    def setUp(self):
+        self.buyer = self._create_user("history-buyer", "buyer")
+        self.other_buyer = self._create_user("history-other-buyer", "buyer")
+        self.seller_user = self._create_user("history-seller", "seller")
+        self.other_seller_user = self._create_user(
+            "history-other-seller",
+            "seller",
+        )
+        self.seller = SellerProfile.objects.create(
+            user=self.seller_user,
+            store_name="Toko Riwayat",
+        )
+        self.other_seller = SellerProfile.objects.create(
+            user=self.other_seller_user,
+            store_name="Toko Lain",
+        )
+        self.product = self._create_product(self.seller, "Produk Riwayat")
+        self.other_product = self._create_product(
+            self.other_seller,
+            "Produk Lain",
+        )
+        self.order = self._create_order(
+            self.buyer,
+            self.seller,
+            self.product,
+            status="diproses",
+        )
+        self.other_buyer_order = self._create_order(
+            self.other_buyer,
+            self.seller,
+            self.product,
+            status="dikirim",
+        )
+        self.other_seller_order = self._create_order(
+            self.buyer,
+            self.other_seller,
+            self.other_product,
+            status="selesai",
+        )
+        self.list_url = reverse("checkout_api:orders")
+
+    def _create_user(self, username, role):
+        return User.objects.create_user(
+            username=username,
+            email=f"{username}@example.com",
+            password="password",
+            role=role,
+        )
+
+    def _create_product(self, seller, name):
+        return Product.objects.create(
+            seller=seller,
+            name=name,
+            description=f"Deskripsi {name}",
+            category="daily_supplies",
+            materials="Bambu",
+            origin="Bandung",
+            price=10000,
+            stock=5,
+            status="verified",
+        )
+
+    def _create_order(self, buyer, seller, product, status):
+        order = Order.objects.create(
+            buyer=buyer,
+            seller=seller,
+            store_name=seller.store_name,
+            recipient_name=buyer.username,
+            phone="08123456789",
+            shipping_address="Jalan Lestari",
+            shipping_method="reguler",
+            payment_method="cod",
+            shipping_cost=5000,
+            total_price=25000,
+            status=status,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            price=10000,
+            quantity=2,
+        )
+        return order
+
+    def test_daftar_pesanan_hanya_dapat_diakses_buyer_atau_seller(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_buyer_hanya_melihat_pesanan_sendiri_dan_dapat_filter_status(self):
+        self.client.force_login(self.buyer)
+
+        response = self.client.get(self.list_url, {"status": "diproses"})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["orders"][0]["id"], self.order.pk)
+        self.assertEqual(data["summary"], {
+            "diproses": 1,
+            "dikirim": 0,
+            "selesai": 1,
+        })
+
+    def test_seller_hanya_melihat_pesanan_tokonya(self):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        order_ids = {order["id"] for order in response.json()["orders"]}
+        self.assertEqual(
+            order_ids,
+            {self.order.pk, self.other_buyer_order.pk},
+        )
+
+    def test_detail_pesanan_tidak_bocor_ke_pengguna_lain(self):
+        self.client.force_login(self.other_buyer)
+
+        response = self.client.get(
+            reverse("checkout_api:order-detail", args=[self.order.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_seller_dapat_mengirim_pesanan_yang_sedang_diproses(self):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.patch(
+            reverse("checkout_api:order-detail", args=[self.order.pk]),
+            {"action": "ship"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "dikirim")
+
+    def test_buyer_dapat_menyelesaikan_pesanan_yang_dikirim(self):
+        self.order.status = "dikirim"
+        self.order.save(update_fields=["status"])
+        self.client.force_login(self.buyer)
+
+        response = self.client.patch(
+            reverse("checkout_api:order-detail", args=[self.order.pk]),
+            {"action": "complete"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "selesai")
+
+    def test_transisi_status_yang_tidak_sesuai_peran_ditolak(self):
+        self.client.force_login(self.buyer)
+
+        response = self.client.patch(
+            reverse("checkout_api:order-detail", args=[self.order.pk]),
+            {"action": "ship"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "diproses")
+
+    def test_snapshot_pesanan_tetap_terlihat_setelah_produk_dihapus(self):
+        self.product.delete()
+        self.client.force_login(self.seller_user)
+
+        response = self.client.get(
+            reverse("checkout_api:order-detail", args=[self.order.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["order"]["items"][0]
+        self.assertIsNone(item["product_id"])
+        self.assertEqual(item["product_name"], "Produk Riwayat")
+
+    def test_pesanan_lama_lintas_toko_tidak_dapat_diubah_bersama(self):
+        mixed_order = Order.objects.create(
+            buyer=self.buyer,
+            seller=None,
+            store_name="Pesanan Lama",
+            recipient_name=self.buyer.username,
+            phone="08123456789",
+            shipping_address="Jalan Lestari",
+            total_price=20000,
+            status="diproses",
+        )
+        for product in (self.product, self.other_product):
+            OrderItem.objects.create(
+                order=mixed_order,
+                product=product,
+                product_name=product.name,
+                price=10000,
+                quantity=1,
+            )
+        self.client.force_login(self.seller_user)
+
+        response = self.client.patch(
+            reverse("checkout_api:order-detail", args=[mixed_order.pk]),
+            {"action": "ship"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)

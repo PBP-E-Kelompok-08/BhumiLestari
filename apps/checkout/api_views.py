@@ -1,11 +1,12 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Cart, CartItem, Order
-from .permissions import IsBuyer
+from .permissions import IsBuyer, IsBuyerOrSeller
 from .serializers import (
     CartItemCreateSerializer,
     CartItemSerializer,
@@ -13,8 +14,15 @@ from .serializers import (
     CartSelectionSerializer,
     CheckoutCreateSerializer,
     OrderSerializer,
+    OrderStatusActionSerializer,
 )
-from .views import PAYMENT, SHIPPING, _create_order
+from .views import (
+    PAYMENT,
+    SHIPPING,
+    _create_order,
+    _mixed_legacy_order,
+    _role_orders,
+)
 
 
 def _cart_items(cart):
@@ -194,10 +202,56 @@ class CheckoutSummaryAPIView(APIView):
         )
 
 
-class CheckoutCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsBuyer]
+class OrderPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+class OrderCollectionAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsBuyerOrSeller]
+    pagination_class = OrderPagination
+
+    def get(self, request):
+        orders = _role_orders(request.user)
+        order_status = request.query_params.get("status", "").strip()
+        valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}
+        if order_status:
+            orders = (
+                orders.filter(status=order_status)
+                if order_status in valid_statuses
+                else orders.none()
+            )
+        orders = orders.order_by("-created_at")
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(orders, request, view=self)
+        serializer = OrderSerializer(
+            page,
+            many=True,
+            context={"request": request},
+        )
+        role_orders = _role_orders(request.user)
+        return Response(
+            {
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "summary": {
+                    "diproses": role_orders.filter(status="diproses").count(),
+                    "dikirim": role_orders.filter(status="dikirim").count(),
+                    "selesai": role_orders.filter(status="selesai").count(),
+                },
+                "orders": serializer.data,
+            }
+        )
 
     def post(self, request):
+        if request.user.role != "buyer":
+            return Response(
+                {"detail": "Hanya buyer yang dapat membuat pesanan."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = CheckoutCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         cart, _ = Cart.objects.get_or_create(user=request.user)
@@ -238,3 +292,49 @@ class CheckoutCreateAPIView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class OrderDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsBuyerOrSeller]
+
+    def get_object(self, request, order_id):
+        return get_object_or_404(_role_orders(request.user), pk=order_id)
+
+    def get(self, request, order_id):
+        order = self.get_object(request, order_id)
+        serializer = OrderSerializer(
+            order,
+            context={"request": request},
+        )
+        return Response({"order": serializer.data})
+
+    def patch(self, request, order_id):
+        order = self.get_object(request, order_id)
+        input_serializer = OrderStatusActionSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        action = input_serializer.validated_data["action"]
+
+        if _mixed_legacy_order(order):
+            return Response(
+                {"detail": "Pesanan lama lintas toko tidak dapat diubah bersama."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        role = request.user.role
+        if role == "seller" and action == "ship" and order.status == "diproses":
+            order.status = "dikirim"
+        elif role == "buyer" and action == "complete" and order.status == "dikirim":
+            order.status = "selesai"
+        else:
+            return Response(
+                {"detail": "Transisi status tidak diizinkan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        order.save(update_fields=["status"])
+
+        order = self.get_object(request, order_id)
+        output_serializer = OrderSerializer(
+            order,
+            context={"request": request},
+        )
+        return Response({"order": output_serializer.data})

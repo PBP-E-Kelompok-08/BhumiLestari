@@ -167,7 +167,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
+    items = serializers.SerializerMethodField()
+    total_price = serializers.SerializerMethodField()
     shipping_method_display = serializers.CharField(
         source="get_shipping_method_display",
         read_only=True,
@@ -201,3 +202,31 @@ class OrderSerializer(serializers.ModelSerializer):
             "items",
         ]
         read_only_fields = fields
+
+    def get_items(self, order):
+        items = list(order.items.all())
+        request = self.context.get("request")
+        user = request.user if request else None
+        if user and getattr(user, "role", None) == "seller":
+            if not order.seller_id or order.seller.user_id != user.id:
+                items = [
+                    item
+                    for item in items
+                    if item.product
+                    and item.product.seller.user_id == user.id
+                ]
+        return OrderItemSerializer(items, many=True).data
+
+    def get_total_price(self, order):
+        request = self.context.get("request")
+        user = request.user if request else None
+        if user and getattr(user, "role", None) == "seller":
+            return sum(
+                item["line_total"]
+                for item in self.get_items(order)
+            )
+        return order.total_price
+
+
+class OrderStatusActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["ship", "complete"])

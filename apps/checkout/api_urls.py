@@ -5,8 +5,9 @@ from .api_views import (
     CartItemCreateAPIView,
     CartItemDetailAPIView,
     CartSelectionAPIView,
-    CheckoutCreateAPIView,
     CheckoutSummaryAPIView,
+    OrderCollectionAPIView,
+    OrderDetailAPIView,
 )
 
 
@@ -26,5 +27,10 @@ urlpatterns = [
         name="selection",
     ),
     path("summary/", CheckoutSummaryAPIView.as_view(), name="summary"),
-    path("orders/", CheckoutCreateAPIView.as_view(), name="order-create"),
+    path("orders/", OrderCollectionAPIView.as_view(), name="orders"),
+    path(
+        "orders/<int:order_id>/",
+        OrderDetailAPIView.as_view(),
+        name="order-detail",
+    ),
 ]
