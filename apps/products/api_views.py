@@ -1,12 +1,20 @@
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
+from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import EcoFeature, Product
-from .serializers import EcoFeatureSerializer, ProductPublikSerializer
+from .permissions import IsSeller
+from .serializers import (
+    EcoFeatureSerializer,
+    ProductCreateSerializer,
+    ProductPublikSerializer,
+    ProductSellerSerializer,
+)
+from .views import kirim_ke_api
 
 
 URUTAN_PRODUK = {
@@ -17,9 +25,9 @@ URUTAN_PRODUK = {
 }
 
 
-def _produk_publik():
+def _produk_dengan_detail(queryset):
     return (
-        Product.objects.filter(status="verified")
+        queryset
         .select_related("seller")
         .prefetch_related("eco_features")
         .annotate(
@@ -34,6 +42,10 @@ def _produk_publik():
             ),
         )
     )
+
+
+def _produk_publik():
+    return _produk_dengan_detail(Product.objects.filter(status="verified"))
 
 
 class ProductPagination(PageNumberPagination):
@@ -108,6 +120,68 @@ class ProductDetailAPIView(APIView):
             context={"request": request},
         )
         return Response({"data": serializer.data})
+
+
+class ProductMineAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsSeller]
+    pagination_class = ProductPagination
+
+    def get(self, request):
+        products = _produk_dengan_detail(
+            Product.objects.filter(seller=request.user.seller_profile)
+        )
+
+        product_status = request.query_params.get("status", "").strip()
+        valid_statuses = {choice[0] for choice in Product.STATUS_CHOICES}
+        if product_status:
+            products = (
+                products.filter(status=product_status)
+                if product_status in valid_statuses
+                else products.none()
+            )
+
+        query = request.query_params.get("q", "").strip()
+        if query:
+            products = products.filter(
+                Q(name__icontains=query)
+                | Q(description__icontains=query)
+                | Q(materials__icontains=query)
+            )
+
+        products = products.order_by("-created_at")
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(products, request, view=self)
+        serializer = ProductSellerSerializer(
+            page,
+            many=True,
+            context={"request": request},
+        )
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request):
+        input_serializer = ProductCreateSerializer(
+            data=request.data,
+            context={"seller": request.user.seller_profile},
+        )
+        input_serializer.is_valid(raise_exception=True)
+        product = input_serializer.save()
+
+        mock_api_synced = kirim_ke_api(product)
+        product = get_object_or_404(
+            _produk_dengan_detail(Product.objects.all()),
+            pk=product.pk,
+        )
+        output_serializer = ProductSellerSerializer(
+            product,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "product": output_serializer.data,
+                "mock_api_synced": mock_api_synced,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class EcoFeatureListAPIView(APIView):

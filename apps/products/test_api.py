@@ -1,9 +1,12 @@
+import io
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from apps.reviews.models import UlasanToko
 from apps.users.models import SellerProfile
@@ -12,6 +15,16 @@ from .models import EcoFeature, Product
 
 
 User = get_user_model()
+
+
+def valid_png(name="product.png"):
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), color="green").save(buffer, format="PNG")
+    return SimpleUploadedFile(
+        name,
+        buffer.getvalue(),
+        content_type="image/png",
+    )
 
 
 @override_settings(
@@ -209,3 +222,161 @@ class ProductPublicAPITest(TestCase):
         self.assertEqual(names, sorted(names))
         self.assertIn("Locally Sourced", names)
         self.assertIn("Reusable", names)
+
+
+@override_settings(
+    MEDIA_ROOT=tempfile.mkdtemp(),
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+)
+class ProductSellerAPITest(TestCase):
+    def setUp(self):
+        self.seller_user = User.objects.create_user(
+            username="seller-owner",
+            email="seller-owner@example.com",
+            password="password",
+            role="seller",
+        )
+        self.other_seller_user = User.objects.create_user(
+            username="seller-other",
+            email="seller-other@example.com",
+            password="password",
+            role="seller",
+        )
+        self.buyer = User.objects.create_user(
+            username="buyer-products",
+            email="buyer-products@example.com",
+            password="password",
+            role="buyer",
+        )
+        self.seller = SellerProfile.objects.create(
+            user=self.seller_user,
+            store_name="Toko Owner",
+        )
+        self.other_seller = SellerProfile.objects.create(
+            user=self.other_seller_user,
+            store_name="Toko Other",
+        )
+        self.feature, _ = EcoFeature.objects.get_or_create(name="Reusable")
+        self.own_product = self._create_product(self.seller, "Produk Sendiri")
+        self.other_product = self._create_product(
+            self.other_seller,
+            "Produk Orang Lain",
+        )
+        self.url = reverse("products_api:mine")
+
+    def _create_product(self, seller, name):
+        product = Product.objects.create(
+            seller=seller,
+            name=name,
+            description=f"Deskripsi {name}",
+            category="daily_supplies",
+            materials="Bambu",
+            origin="Bandung",
+            price=50000,
+            stock=3,
+            image=SimpleUploadedFile(f"{name}.jpg", b"gambar"),
+            verification_document=SimpleUploadedFile(
+                f"{name}.pdf",
+                b"%PDF-dokumen",
+            ),
+            status="pending",
+        )
+        product.eco_features.add(self.feature)
+        return product
+
+    def _create_payload(self, name="Produk Mobile"):
+        return {
+            "name": name,
+            "description": "Produk ramah lingkungan dari aplikasi mobile",
+            "category": "daily_supplies",
+            "materials": "Bambu, Kayu",
+            "origin": "Bandung",
+            "eco_feature_ids": [self.feature.pk],
+            "price": 75000,
+            "discount": 10,
+            "stock": 8,
+            "image": valid_png(),
+            "verification_document": SimpleUploadedFile(
+                "sertifikat.pdf",
+                b"%PDF-1.4 dokumen",
+                content_type="application/pdf",
+            ),
+        }
+
+    def test_guest_dan_buyer_tidak_dapat_mengakses_endpoint_seller(self):
+        guest_response = self.client.get(self.url)
+        self.client.force_login(self.buyer)
+        buyer_response = self.client.get(self.url)
+
+        self.assertEqual(guest_response.status_code, 403)
+        self.assertEqual(buyer_response.status_code, 403)
+
+    def test_seller_hanya_mendapat_produk_milik_sendiri(self):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["products"][0]["id"], str(self.own_product.pk))
+        self.assertNotEqual(data["products"][0]["id"], str(self.other_product.pk))
+
+    def test_seller_dapat_memfilter_status(self):
+        self.own_product.status = "verified"
+        self.own_product.save(update_fields=["status"])
+        self.client.force_login(self.seller_user)
+
+        found = self.client.get(self.url, {"status": "verified"}).json()
+        empty = self.client.get(self.url, {"status": "pending"}).json()
+
+        self.assertEqual(found["count"], 1)
+        self.assertEqual(empty["count"], 0)
+
+    @patch("apps.products.api_views.kirim_ke_api", return_value=True)
+    def test_seller_dapat_membuat_produk(self, mock_sync):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.post(self.url, self._create_payload())
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        product = Product.objects.get(name="Produk Mobile")
+        self.assertEqual(product.seller, self.seller)
+        self.assertEqual(product.status, "pending")
+        self.assertEqual(list(product.eco_features.all()), [self.feature])
+        self.assertTrue(data["mock_api_synced"])
+        self.assertNotIn("verification_document", data["product"])
+        self.assertTrue(data["product"]["verification_document_uploaded"])
+        mock_sync.assert_called_once_with(product)
+
+    @patch("apps.products.api_views.kirim_ke_api", return_value=False)
+    def test_produk_tetap_disimpan_saat_mock_api_gagal(self, mock_sync):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.post(
+            self.url,
+            self._create_payload(name="Produk Belum Sinkron"),
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.json()["mock_api_synced"])
+        self.assertTrue(Product.objects.filter(name="Produk Belum Sinkron").exists())
+        mock_sync.assert_called_once()
+
+    @patch("apps.products.api_views.kirim_ke_api")
+    def test_dokumen_tidak_valid_ditolak(self, mock_sync):
+        self.client.force_login(self.seller_user)
+        payload = self._create_payload(name="Produk Dokumen Palsu")
+        payload["verification_document"] = SimpleUploadedFile(
+            "sertifikat.pdf",
+            b"bukan pdf",
+            content_type="application/pdf",
+        )
+
+        response = self.client.post(self.url, payload)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("verification_document", response.json())
+        self.assertFalse(Product.objects.filter(name="Produk Dokumen Palsu").exists())
+        mock_sync.assert_not_called()
