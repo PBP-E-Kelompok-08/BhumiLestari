@@ -478,3 +478,129 @@ class ProductSellerAPITest(TestCase):
         self.assertEqual(own_response.json()["deleted_id"], str(self.own_product.pk))
         self.assertFalse(Product.objects.filter(pk=self.own_product.pk).exists())
         self.assertTrue(Product.objects.filter(pk=self.other_product.pk).exists())
+
+
+@override_settings(
+    MEDIA_ROOT=tempfile.mkdtemp(),
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+)
+class ProductVerificationAdminAPITest(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-products-api",
+            email="admin-products-api@example.com",
+            password="password",
+        )
+        self.seller_user = User.objects.create_user(
+            username="seller-verification",
+            email="seller-verification@example.com",
+            password="password",
+            role="seller",
+        )
+        self.seller = SellerProfile.objects.create(
+            user=self.seller_user,
+            store_name="Toko Verifikasi",
+        )
+        self.feature, _ = EcoFeature.objects.get_or_create(name="Reusable")
+        self.pending = self._create_product("Produk Pending", "pending")
+        self.verified = self._create_product("Produk Verified", "verified")
+        self.queue_url = reverse("products_api:verification-queue")
+        self.detail_url = reverse(
+            "products_api:verification-detail",
+            args=[self.pending.pk],
+        )
+
+    def _create_product(self, name, status):
+        product = Product.objects.create(
+            seller=self.seller,
+            name=name,
+            description=f"Deskripsi {name}",
+            category="daily_supplies",
+            materials="Bambu",
+            origin="Bandung",
+            price=50000,
+            stock=3,
+            image=SimpleUploadedFile(f"{name}.jpg", b"gambar"),
+            verification_document=SimpleUploadedFile(
+                f"{name}.pdf",
+                b"%PDF-dokumen rahasia",
+            ),
+            status=status,
+        )
+        product.eco_features.add(self.feature)
+        return product
+
+    def test_antrean_hanya_dapat_diakses_admin(self):
+        guest_response = self.client.get(self.queue_url)
+        self.client.force_login(self.seller_user)
+        seller_response = self.client.get(self.queue_url)
+
+        self.assertEqual(guest_response.status_code, 403)
+        self.assertEqual(seller_response.status_code, 403)
+
+    def test_admin_mendapat_antrean_filter_dan_ringkasan(self):
+        self.client.force_login(self.admin)
+
+        all_data = self.client.get(self.queue_url).json()
+        pending_data = self.client.get(
+            self.queue_url,
+            {"status": "pending"},
+        ).json()
+
+        self.assertEqual(all_data["count"], 2)
+        self.assertEqual(all_data["summary"]["pending"], 1)
+        self.assertEqual(all_data["summary"]["verified"], 1)
+        self.assertEqual(pending_data["count"], 1)
+        self.assertEqual(pending_data["products"][0]["id"], str(self.pending.pk))
+
+    def test_detail_admin_tidak_mengekspos_dokumen(self):
+        self.client.force_login(self.admin)
+
+        data = self.client.get(self.detail_url).json()["product"]
+
+        self.assertNotIn("verification_document", data)
+        self.assertTrue(data["verification_document_uploaded"])
+
+    def test_admin_dapat_menyetujui_produk(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.patch(
+            self.detail_url,
+            {"action": "approve"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.pending.refresh_from_db()
+        self.assertEqual(self.pending.status, "verified")
+        self.assertEqual(self.pending.verification_summary, "")
+
+    def test_penolakan_memerlukan_alasan(self):
+        self.client.force_login(self.admin)
+
+        invalid_response = self.client.patch(
+            self.detail_url,
+            {"action": "reject"},
+            content_type="application/json",
+        )
+        valid_response = self.client.patch(
+            self.detail_url,
+            {"action": "reject", "reason": "Dokumen tidak terbaca"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertIn("reason", invalid_response.json())
+        self.assertEqual(valid_response.status_code, 200)
+        self.pending.refresh_from_db()
+        self.assertEqual(self.pending.status, "rejected")
+        self.assertEqual(self.pending.verification_summary, "Dokumen tidak terbaca")
+
+    def test_produk_tidak_ditemukan(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse("products_api:verification-detail", args=["00000000-0000-0000-0000-000000000000"])
+        )
+
+        self.assertEqual(response.status_code, 404)

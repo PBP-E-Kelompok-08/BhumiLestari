@@ -2,7 +2,7 @@ from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -14,6 +14,7 @@ from .serializers import (
     ProductPublikSerializer,
     ProductSellerSerializer,
     ProductUpdateSerializer,
+    ProductVerificationActionSerializer,
 )
 from .views import kirim_ke_api
 
@@ -242,6 +243,85 @@ class ProductMineDetailAPIView(APIView):
             }
         )
 
+
+class ProductVerificationQueueAPIView(APIView):
+    permission_classes = [IsAdminUser]
+    pagination_class = ProductPagination
+
+    def get(self, request):
+        products = _produk_dengan_detail(Product.objects.all())
+
+        product_status = request.query_params.get("status", "").strip()
+        valid_statuses = {choice[0] for choice in Product.STATUS_CHOICES}
+        if product_status:
+            products = (
+                products.filter(status=product_status)
+                if product_status in valid_statuses
+                else products.none()
+            )
+
+        query = request.query_params.get("q", "").strip()
+        if query:
+            products = products.filter(
+                Q(name__icontains=query)
+                | Q(seller__store_name__icontains=query)
+            )
+
+        products = products.order_by("-created_at")
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(products, request, view=self)
+        serializer = ProductSellerSerializer(
+            page,
+            many=True,
+            context={"request": request},
+        )
+        response = paginator.get_paginated_response(serializer.data)
+        response.data["summary"] = {
+            "pending": Product.objects.filter(status="pending").count(),
+            "verified": Product.objects.filter(status="verified").count(),
+            "rejected": Product.objects.filter(status="rejected").count(),
+            "expired": Product.objects.filter(status="expired").count(),
+        }
+        return response
+
+
+class ProductVerificationDetailAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get_object(self, product_id):
+        return get_object_or_404(
+            _produk_dengan_detail(Product.objects.all()),
+            pk=product_id,
+        )
+
+    def get(self, request, product_id):
+        product = self.get_object(product_id)
+        serializer = ProductSellerSerializer(
+            product,
+            context={"request": request},
+        )
+        return Response({"product": serializer.data})
+
+    def patch(self, request, product_id):
+        product = self.get_object(product_id)
+        input_serializer = ProductVerificationActionSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+
+        if data["action"] == "approve":
+            product.status = "verified"
+            product.verification_summary = ""
+        else:
+            product.status = "rejected"
+            product.verification_summary = data["reason"]
+        product.save(update_fields=["status", "verification_summary"])
+
+        product = self.get_object(product_id)
+        output_serializer = ProductSellerSerializer(
+            product,
+            context={"request": request},
+        )
+        return Response({"product": output_serializer.data})
 
 class EcoFeatureListAPIView(APIView):
     permission_classes = [AllowAny]

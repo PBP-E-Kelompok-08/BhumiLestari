@@ -219,3 +219,21 @@ class ProductUpdateSerializer(serializers.ModelSerializer):
         if eco_features is not None:
             instance.eco_features.set(eco_features)
         return instance
+
+
+class ProductVerificationActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["approve", "reject"])
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+    )
+
+    def validate(self, attrs):
+        reason = attrs.get("reason", "").strip()
+        if attrs["action"] == "reject" and not reason:
+            raise serializers.ValidationError(
+                {"reason": "Alasan penolakan wajib diisi."}
+            )
+        attrs["reason"] = reason
+        return attrs
