@@ -13,6 +13,7 @@ from .serializers import (
     ProductCreateSerializer,
     ProductPublikSerializer,
     ProductSellerSerializer,
+    ProductUpdateSerializer,
 )
 from .views import kirim_ke_api
 
@@ -181,6 +182,64 @@ class ProductMineAPIView(APIView):
                 "mock_api_synced": mock_api_synced,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class ProductMineDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsSeller]
+
+    def get_object(self, request, product_id):
+        return get_object_or_404(
+            _produk_dengan_detail(
+                Product.objects.filter(seller=request.user.seller_profile)
+            ),
+            pk=product_id,
+        )
+
+    def get(self, request, product_id):
+        product = self.get_object(request, product_id)
+        serializer = ProductSellerSerializer(
+            product,
+            context={"request": request},
+        )
+        return Response({"product": serializer.data})
+
+    def patch(self, request, product_id):
+        product = self.get_object(request, product_id)
+        input_serializer = ProductUpdateSerializer(
+            product,
+            data=request.data,
+            partial=True,
+        )
+        input_serializer.is_valid(raise_exception=True)
+        product = input_serializer.save()
+
+        verification_resubmitted = input_serializer.verification_resubmitted
+        mock_api_synced = (
+            kirim_ke_api(product) if verification_resubmitted else None
+        )
+        product = self.get_object(request, product_id)
+        output_serializer = ProductSellerSerializer(
+            product,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "product": output_serializer.data,
+                "verification_resubmitted": verification_resubmitted,
+                "mock_api_synced": mock_api_synced,
+            }
+        )
+
+    def delete(self, request, product_id):
+        product = self.get_object(request, product_id)
+        deleted_id = str(product.pk)
+        product.delete()
+        return Response(
+            {
+                "detail": "Produk berhasil dihapus.",
+                "deleted_id": deleted_id,
+            }
         )
 
 

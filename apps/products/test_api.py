@@ -263,6 +263,10 @@ class ProductSellerAPITest(TestCase):
             "Produk Orang Lain",
         )
         self.url = reverse("products_api:mine")
+        self.detail_url = reverse(
+            "products_api:mine-detail",
+            args=[self.own_product.pk],
+        )
 
     def _create_product(self, seller, name):
         product = Product.objects.create(
@@ -380,3 +384,97 @@ class ProductSellerAPITest(TestCase):
         self.assertIn("verification_document", response.json())
         self.assertFalse(Product.objects.filter(name="Produk Dokumen Palsu").exists())
         mock_sync.assert_not_called()
+
+    def test_detail_hanya_dapat_mengakses_produk_milik_sendiri(self):
+        self.client.force_login(self.seller_user)
+
+        own_response = self.client.get(self.detail_url)
+        other_response = self.client.get(
+            reverse("products_api:mine-detail", args=[self.other_product.pk])
+        )
+
+        self.assertEqual(own_response.status_code, 200)
+        self.assertEqual(
+            own_response.json()["product"]["id"],
+            str(self.own_product.pk),
+        )
+        self.assertEqual(other_response.status_code, 404)
+
+    @patch("apps.products.api_views.kirim_ke_api")
+    def test_patch_nonverifikasi_tidak_mengubah_status(self, mock_sync):
+        self.own_product.status = "verified"
+        self.own_product.save(update_fields=["status"])
+        self.client.force_login(self.seller_user)
+
+        response = self.client.patch(
+            self.detail_url,
+            {"name": "Nama Produk Baru", "stock": 10},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.own_product.refresh_from_db()
+        self.assertEqual(self.own_product.name, "Nama Produk Baru")
+        self.assertEqual(self.own_product.stock, 10)
+        self.assertEqual(self.own_product.status, "verified")
+        self.assertFalse(response.json()["verification_resubmitted"])
+        self.assertIsNone(response.json()["mock_api_synced"])
+        mock_sync.assert_not_called()
+
+    @patch("apps.products.api_views.kirim_ke_api", return_value=True)
+    def test_patch_data_verifikasi_mengembalikan_status_pending(self, mock_sync):
+        self.own_product.status = "verified"
+        self.own_product.verification_summary = "Lolos"
+        self.own_product.external_product_id = "prd-001"
+        self.own_product.save(
+            update_fields=[
+                "status",
+                "verification_summary",
+                "external_product_id",
+            ]
+        )
+        self.client.force_login(self.seller_user)
+
+        response = self.client.patch(
+            self.detail_url,
+            {"origin": "Yogyakarta"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.own_product.refresh_from_db()
+        self.assertEqual(self.own_product.origin, "Yogyakarta")
+        self.assertEqual(self.own_product.status, "pending")
+        self.assertEqual(self.own_product.verification_summary, "")
+        self.assertTrue(response.json()["verification_resubmitted"])
+        self.assertTrue(response.json()["mock_api_synced"])
+        mock_sync.assert_called_once_with(self.own_product)
+
+    @patch("apps.products.api_views.kirim_ke_api")
+    def test_status_tidak_dapat_diubah_langsung_oleh_seller(self, mock_sync):
+        self.client.force_login(self.seller_user)
+
+        response = self.client.patch(
+            self.detail_url,
+            {"status": "verified"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.own_product.refresh_from_db()
+        self.assertEqual(self.own_product.status, "pending")
+        mock_sync.assert_not_called()
+
+    def test_delete_hanya_menghapus_produk_milik_sendiri(self):
+        self.client.force_login(self.seller_user)
+
+        other_response = self.client.delete(
+            reverse("products_api:mine-detail", args=[self.other_product.pk])
+        )
+        own_response = self.client.delete(self.detail_url)
+
+        self.assertEqual(other_response.status_code, 404)
+        self.assertEqual(own_response.status_code, 200)
+        self.assertEqual(own_response.json()["deleted_id"], str(self.own_product.pk))
+        self.assertFalse(Product.objects.filter(pk=self.own_product.pk).exists())
+        self.assertTrue(Product.objects.filter(pk=self.other_product.pk).exists())

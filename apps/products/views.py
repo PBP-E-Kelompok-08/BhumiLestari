@@ -19,6 +19,8 @@ def kirim_ke_api(product):
             "origin": product.origin,
             "eco_features": list(product.eco_features.values_list("name", flat=True)),
         }
+        if product.external_product_id:
+            data["product_id"] = product.external_product_id
 
         with product.verification_document.open("rb") as file:
             response = requests.post(

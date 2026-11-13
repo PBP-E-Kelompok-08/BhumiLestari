@@ -1,3 +1,4 @@
+import json
 import tempfile
 import uuid
 from django.contrib.auth import get_user_model
@@ -149,6 +150,22 @@ class ProductTest(TestCase):
 
         hasil = kirim_ke_api(self.produk)
         self.assertFalse(hasil)
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.views.requests.post")
+    def test_kirim_ulang_mempertahankan_external_product_id(self, mock_post):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save(update_fields=["external_product_id"])
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"data": {"product_id": "prd-001"}}
+        mock_post.return_value = mock_response
+
+        hasil = kirim_ke_api(self.produk)
+
+        self.assertTrue(hasil)
+        payload = json.loads(mock_post.call_args.kwargs["data"]["data"])
+        self.assertEqual(payload["product_id"], "prd-001")
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
     @patch("apps.products.views.requests.post")
