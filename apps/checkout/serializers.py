@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from apps.products.models import Product
 
-from .models import Cart, CartItem
+from .models import Cart, CartItem, Order, OrderItem
 
 
 class CartSellerSerializer(serializers.Serializer):
@@ -136,3 +136,68 @@ class CartSelectionSerializer(serializers.Serializer):
         child=serializers.IntegerField(min_value=1),
         allow_empty=True,
     )
+
+
+class CheckoutCreateSerializer(serializers.Serializer):
+    recipient_name = serializers.CharField(max_length=100)
+    phone = serializers.CharField(max_length=20)
+    shipping_address = serializers.CharField()
+    shipping_method = serializers.ChoiceField(choices=Order.SHIPPING_CHOICES)
+    payment_method = serializers.ChoiceField(choices=Order.PAYMENT_CHOICES)
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_id = serializers.UUIDField(read_only=True, allow_null=True)
+    line_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "id",
+            "product_id",
+            "product_name",
+            "price",
+            "quantity",
+            "line_total",
+        ]
+        read_only_fields = fields
+
+    def get_line_total(self, item):
+        return item.price * item.quantity
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    shipping_method_display = serializers.CharField(
+        source="get_shipping_method_display",
+        read_only=True,
+    )
+    payment_method_display = serializers.CharField(
+        source="get_payment_method_display",
+        read_only=True,
+    )
+    status_display = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "store_name",
+            "recipient_name",
+            "phone",
+            "shipping_address",
+            "shipping_method",
+            "shipping_method_display",
+            "payment_method",
+            "payment_method_display",
+            "shipping_cost",
+            "total_price",
+            "status",
+            "status_display",
+            "created_at",
+            "items",
+        ]
+        read_only_fields = fields

@@ -5,6 +5,8 @@ from .api_views import (
     CartItemCreateAPIView,
     CartItemDetailAPIView,
     CartSelectionAPIView,
+    CheckoutCreateAPIView,
+    CheckoutSummaryAPIView,
 )
 
 
@@ -23,4 +25,6 @@ urlpatterns = [
         CartSelectionAPIView.as_view(),
         name="selection",
     ),
+    path("summary/", CheckoutSummaryAPIView.as_view(), name="summary"),
+    path("orders/", CheckoutCreateAPIView.as_view(), name="order-create"),
 ]

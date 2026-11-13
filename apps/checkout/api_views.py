@@ -4,14 +4,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Cart, CartItem
+from .models import Cart, CartItem, Order
 from .permissions import IsBuyer
 from .serializers import (
     CartItemCreateSerializer,
     CartItemSerializer,
     CartItemUpdateSerializer,
     CartSelectionSerializer,
+    CheckoutCreateSerializer,
+    OrderSerializer,
 )
+from .views import PAYMENT, SHIPPING, _create_order
 
 
 def _cart_items(cart):
@@ -133,3 +136,105 @@ class CartSelectionAPIView(APIView):
         cart.items.filter(pk__in=selected_ids).update(is_selected=True)
         cart.items.exclude(pk__in=selected_ids).update(is_selected=False)
         return Response(_cart_summary(cart))
+
+
+class CheckoutSummaryAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsBuyer]
+
+    def get(self, request):
+        shipping_method = request.query_params.get(
+            "shipping_method",
+            "reguler",
+        )
+        if shipping_method not in SHIPPING:
+            return Response(
+                {"shipping_method": ["Metode pengiriman tidak valid."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        selected_items = list(_cart_items(cart).filter(is_selected=True))
+        items_total = sum(
+            int(item.product.final_price) * item.quantity
+            for item in selected_items
+        )
+        item_count = sum(item.quantity for item in selected_items)
+        store_count = len(
+            {item.product.seller_id for item in selected_items}
+        )
+        shipping_cost = SHIPPING[shipping_method][1] * store_count
+        serializer = CartItemSerializer(
+            selected_items,
+            many=True,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "recipient_defaults": {
+                    "recipient_name": request.user.full_name or "",
+                    "phone": request.user.phone or "",
+                    "shipping_address": request.user.address or "",
+                },
+                "shipping_method": shipping_method,
+                "shipping_options": [
+                    {"key": key, "label": value[0], "cost": value[1]}
+                    for key, value in SHIPPING.items()
+                ],
+                "payment_options": [
+                    {"key": key, "label": value}
+                    for key, value in PAYMENT.items()
+                ],
+                "items_total": items_total,
+                "item_count": item_count,
+                "store_count": store_count,
+                "shipping_cost": shipping_cost,
+                "grand_total": items_total + shipping_cost,
+                "items": serializer.data,
+            }
+        )
+
+
+class CheckoutCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsBuyer]
+
+    def post(self, request):
+        serializer = CheckoutCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        if not cart.items.filter(is_selected=True).exists():
+            return Response(
+                {"detail": "Tidak ada barang yang dipilih."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = serializer.validated_data
+        try:
+            orders = _create_order(
+                request.user,
+                data["recipient_name"],
+                data["phone"],
+                data["shipping_address"],
+                data["shipping_method"],
+                data["payment_method"],
+            )
+        except ValueError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order_ids = [order.pk for order in orders]
+        created_orders = (
+            Order.objects.filter(pk__in=order_ids)
+            .select_related("seller")
+            .prefetch_related("items")
+            .order_by("id")
+        )
+        output_serializer = OrderSerializer(created_orders, many=True)
+        return Response(
+            {
+                "count": len(order_ids),
+                "orders": output_serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )

@@ -5,7 +5,7 @@ from django.urls import reverse
 from apps.products.models import Product
 from apps.users.models import SellerProfile
 
-from .models import Cart, CartItem
+from .models import Cart, CartItem, Order, OrderItem
 
 
 User = get_user_model()
@@ -215,3 +215,188 @@ class CartAPITest(TestCase):
         self.assertEqual(response.json()["deleted_id"], item.pk)
         self.assertEqual(response.json()["cart_count"], 0)
         self.assertFalse(CartItem.objects.filter(pk=item.pk).exists())
+
+
+@override_settings(
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+)
+class CheckoutCreateAPITest(TestCase):
+    def setUp(self):
+        self.buyer = User.objects.create_user(
+            username="checkout-api-buyer",
+            email="checkout-api-buyer@example.com",
+            password="password",
+            role="buyer",
+            full_name="Budi Lestari",
+            phone="08123456789",
+            address="Jalan Hijau 10",
+        )
+        self.seller_one = self._create_seller("checkout-seller-one", "Toko Satu")
+        self.seller_two = self._create_seller("checkout-seller-two", "Toko Dua")
+        self.product_one = self._create_product(
+            self.seller_one,
+            "Produk Satu",
+            price=10000,
+            stock=5,
+        )
+        self.product_two = self._create_product(
+            self.seller_two,
+            "Produk Dua",
+            price=20000,
+            stock=4,
+        )
+        self.cart = Cart.objects.create(user=self.buyer)
+        self.item_one = CartItem.objects.create(
+            cart=self.cart,
+            product=self.product_one,
+            quantity=2,
+            is_selected=True,
+        )
+        self.item_two = CartItem.objects.create(
+            cart=self.cart,
+            product=self.product_two,
+            quantity=1,
+            is_selected=True,
+        )
+        self.summary_url = reverse("checkout_api:summary")
+        self.create_url = reverse("checkout_api:order-create")
+        self.valid_payload = {
+            "recipient_name": "Budi Lestari",
+            "phone": "08123456789",
+            "shipping_address": "Jalan Hijau 10",
+            "shipping_method": "reguler",
+            "payment_method": "cod",
+        }
+        self.client.force_login(self.buyer)
+
+    def _create_seller(self, username, store_name):
+        user = User.objects.create_user(
+            username=username,
+            email=f"{username}@example.com",
+            password="password",
+            role="seller",
+        )
+        return SellerProfile.objects.create(user=user, store_name=store_name)
+
+    def _create_product(self, seller, name, price, stock):
+        return Product.objects.create(
+            seller=seller,
+            name=name,
+            description=f"Deskripsi {name}",
+            category="daily_supplies",
+            materials="Bambu",
+            origin="Bandung",
+            price=price,
+            discount=10,
+            stock=stock,
+            status="verified",
+        )
+
+    def test_summary_menghitung_total_per_toko(self):
+        response = self.client.get(self.summary_url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["recipient_defaults"]["recipient_name"], "Budi Lestari")
+        self.assertEqual(data["items_total"], 36000)
+        self.assertEqual(data["item_count"], 3)
+        self.assertEqual(data["store_count"], 2)
+        self.assertEqual(data["shipping_cost"], 14000)
+        self.assertEqual(data["grand_total"], 50000)
+        self.assertEqual(len(data["items"]), 2)
+
+    def test_summary_menolak_metode_pengiriman_tidak_valid(self):
+        response = self.client.get(
+            self.summary_url,
+            {"shipping_method": "teleportasi"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("shipping_method", response.json())
+
+    def test_checkout_membuat_satu_order_per_toko(self):
+        unselected = CartItem.objects.create(
+            cart=self.cart,
+            product=self._create_product(
+                self.seller_one,
+                "Produk Tidak Dipilih",
+                price=5000,
+                stock=2,
+            ),
+            quantity=1,
+            is_selected=False,
+        )
+
+        response = self.client.post(
+            self.create_url,
+            self.valid_payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["count"], 2)
+        self.assertEqual(Order.objects.filter(buyer=self.buyer).count(), 2)
+        self.assertEqual(OrderItem.objects.count(), 2)
+        self.product_one.refresh_from_db()
+        self.product_two.refresh_from_db()
+        self.assertEqual(self.product_one.stock, 3)
+        self.assertEqual(self.product_two.stock, 3)
+        self.assertTrue(CartItem.objects.filter(pk=unselected.pk).exists())
+        self.assertFalse(CartItem.objects.filter(pk=self.item_one.pk).exists())
+        self.assertFalse(CartItem.objects.filter(pk=self.item_two.pk).exists())
+
+        totals = sorted(order["total_price"] for order in response.json()["orders"])
+        self.assertEqual(totals, [25000, 25000])
+
+    def test_payload_checkout_wajib_lengkap(self):
+        response = self.client.post(
+            self.create_url,
+            {"recipient_name": "Budi"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("shipping_address", response.json())
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_checkout_tanpa_item_terpilih_ditolak(self):
+        self.cart.items.update(is_selected=False)
+
+        response = self.client.post(
+            self.create_url,
+            self.valid_payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_stok_tidak_cukup_membatalkan_seluruh_checkout(self):
+        self.product_two.stock = 0
+        self.product_two.save(update_fields=["stock"])
+
+        response = self.client.post(
+            self.create_url,
+            self.valid_payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.count(), 0)
+        self.product_one.refresh_from_db()
+        self.assertEqual(self.product_one.stock, 5)
+        self.assertTrue(CartItem.objects.filter(pk=self.item_one.pk).exists())
+
+    def test_produk_nonverified_membatalkan_seluruh_checkout(self):
+        self.product_two.status = "expired"
+        self.product_two.save(update_fields=["status"])
+
+        response = self.client.post(
+            self.create_url,
+            self.valid_payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("tidak tersedia", response.json()["detail"])
+        self.assertEqual(Order.objects.count(), 0)
