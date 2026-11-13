@@ -1,4 +1,3 @@
-import json
 import tempfile
 import uuid
 from django.contrib.auth import get_user_model
@@ -8,6 +7,10 @@ from django.urls import reverse
 from apps.users.models import SellerProfile
 from .models import Product
 from .views import kirim_ke_api,cek_status
+from .integrations import (
+    delete_product_from_mock_api,
+    sync_verification_decision_to_mock_api,
+)
 import requests
 from unittest.mock import patch, MagicMock
 
@@ -28,7 +31,10 @@ def buat_produk(seller, name="Tas Rotan"):
     )
 
 
-@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+@override_settings(
+    MEDIA_ROOT=tempfile.mkdtemp(),
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+)
 class ProductTest(TestCase):
     def setUp(self):
         self.user1 = User.objects.create_user("seller1", email="seller1@gmail.com", password="pass", role="seller")
@@ -130,21 +136,28 @@ class ProductTest(TestCase):
 
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.post")
+    @patch("apps.products.integrations.requests.post")
     def test_kirim_ke_api_berhasil(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.status_code = 201
-        mock_response.json.return_value = {"data": {"product_id": "prd-001"}}
-        mock_post.return_value = mock_response
+        create_response = MagicMock(status_code=201)
+        create_response.json.return_value = {"data": {"product_id": "prd-001"}}
+        document_response = MagicMock(status_code=201)
+        mock_post.side_effect = [create_response, document_response]
 
         hasil = kirim_ke_api(self.produk)
 
         self.assertTrue(hasil)
         self.produk.refresh_from_db()
         self.assertEqual(self.produk.external_product_id, "prd-001")
+        self.assertEqual(mock_post.call_count, 2)
+        self.assertTrue(mock_post.call_args_list[0].args[0].endswith("/api/v1/products/"))
+        self.assertTrue(
+            mock_post.call_args_list[1].args[0].endswith(
+                "/api/v1/products/prd-001/document/"
+            )
+        )
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.post")
+    @patch("apps.products.integrations.requests.post")
     def test_kirim_ke_api_status_bukan_201(self, mock_post):
         mock_post.return_value = MagicMock(status_code=400)
 
@@ -152,23 +165,33 @@ class ProductTest(TestCase):
         self.assertFalse(hasil)
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.post")
-    def test_kirim_ulang_mempertahankan_external_product_id(self, mock_post):
+    @patch("apps.products.integrations.requests.post")
+    @patch("apps.products.integrations.requests.patch")
+    def test_kirim_ulang_mempertahankan_external_product_id(
+        self,
+        mock_patch,
+        mock_post,
+    ):
         self.produk.external_product_id = "prd-001"
         self.produk.save(update_fields=["external_product_id"])
-        mock_response = MagicMock()
-        mock_response.status_code = 201
-        mock_response.json.return_value = {"data": {"product_id": "prd-001"}}
-        mock_post.return_value = mock_response
+        mock_patch.return_value = MagicMock(status_code=200)
+        mock_post.return_value = MagicMock(status_code=201)
 
         hasil = kirim_ke_api(self.produk)
 
         self.assertTrue(hasil)
-        payload = json.loads(mock_post.call_args.kwargs["data"]["data"])
-        self.assertEqual(payload["product_id"], "prd-001")
+        self.assertTrue(
+            mock_patch.call_args.args[0].endswith("/api/v1/products/prd-001/")
+        )
+        self.assertEqual(mock_patch.call_args.kwargs["json"]["name"], self.produk.name)
+        self.assertTrue(
+            mock_post.call_args.args[0].endswith(
+                "/api/v1/products/prd-001/document/"
+            )
+        )
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.post")
+    @patch("apps.products.integrations.requests.post")
     def test_kirim_ke_api_error_koneksi(self, mock_post):
         mock_post.side_effect = requests.exceptions.ConnectionError()
 
@@ -181,7 +204,7 @@ class ProductTest(TestCase):
         mock_kirim.assert_called_once_with(self.produk)
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.get")
+    @patch("apps.products.integrations.requests.get")
     def test_cek_status_update_status(self, mock_get):
         self.produk.external_product_id = "prd-001"
         self.produk.save()
@@ -198,7 +221,7 @@ class ProductTest(TestCase):
         self.assertEqual(self.produk.verification_summary, "Sesuai datanya")
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.get")
+    @patch("apps.products.integrations.requests.get")
     def test_cek_status_verification_kosong(self, mock_get):
         self.produk.external_product_id = "prd-001"
         self.produk.save()
@@ -212,7 +235,7 @@ class ProductTest(TestCase):
         self.assertEqual(self.produk.status, "pending")
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.get")
+    @patch("apps.products.integrations.requests.get")
     def test_cek_status_bukan_200(self, mock_get):
         self.produk.external_product_id = "prd-001"
         self.produk.save()
@@ -223,7 +246,7 @@ class ProductTest(TestCase):
         self.assertEqual(self.produk.status, "pending")
 
     @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
-    @patch("apps.products.views.requests.get")
+    @patch("apps.products.integrations.requests.get")
     def test_cek_status_error_koneksi(self, mock_get):
         self.produk.external_product_id = "prd-001"
         self.produk.save()
@@ -232,3 +255,55 @@ class ProductTest(TestCase):
         cek_status(self.produk)
         self.produk.refresh_from_db()
         self.assertEqual(self.produk.status, "pending")
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.integrations.requests.delete")
+    def test_hapus_produk_remote_memakai_endpoint_v1(self, mock_delete):
+        self.produk.external_product_id = "prd-001"
+        self.produk.save(update_fields=["external_product_id"])
+        mock_delete.return_value = MagicMock(status_code=200)
+
+        hasil = delete_product_from_mock_api(self.produk)
+
+        self.assertTrue(hasil)
+        self.assertTrue(
+            mock_delete.call_args.args[0].endswith("/api/v1/products/prd-001/")
+        )
+
+    @override_settings(MOCK_API_BASE_URL="http://mock-api.test")
+    @patch("apps.products.integrations.requests.patch")
+    @patch("apps.products.integrations.requests.get")
+    def test_keputusan_admin_disinkronkan_ke_verifikasi_v1(
+        self,
+        mock_get,
+        mock_patch,
+    ):
+        self.produk.external_product_id = "prd-001"
+        self.produk.status = "rejected"
+        self.produk.verification_summary = "Dokumen buram"
+        self.produk.save(
+            update_fields=[
+                "external_product_id",
+                "status",
+                "verification_summary",
+            ]
+        )
+        detail_response = MagicMock(status_code=200)
+        detail_response.json.return_value = {
+            "data": {"verification": {"verification_id": "ver-001"}}
+        }
+        mock_get.return_value = detail_response
+        mock_patch.return_value = MagicMock(status_code=200)
+
+        hasil = sync_verification_decision_to_mock_api(self.produk)
+
+        self.assertTrue(hasil)
+        self.assertTrue(
+            mock_patch.call_args.args[0].endswith(
+                "/api/v1/verifications/ver-001/"
+            )
+        )
+        self.assertEqual(
+            mock_patch.call_args.kwargs["json"],
+            {"status": "rejected", "summary": "Dokumen buram"},
+        )

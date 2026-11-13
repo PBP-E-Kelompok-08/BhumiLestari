@@ -1,67 +1,24 @@
-import json
-import requests
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from apps.users.models import SellerProfile
 from .forms import ProductForm
+from .integrations import (
+    delete_product_from_mock_api,
+    refresh_product_status_from_mock_api,
+    sync_product_to_mock_api,
+    sync_verification_decision_to_mock_api,
+)
 from .models import Product
 
 def kirim_ke_api(product):
-    url = settings.MOCK_API_BASE_URL + "/api/products/"
-
-    try:
-        data = {
-            "name": product.name,
-            "seller_id": product.seller.external_id,
-            "seller_name": product.seller.store_name,
-            "materials": [m.strip().lower() for m in product.materials.split(",") if m.strip()],
-            "origin": product.origin,
-            "eco_features": list(product.eco_features.values_list("name", flat=True)),
-        }
-        if product.external_product_id:
-            data["product_id"] = product.external_product_id
-
-        with product.verification_document.open("rb") as file:
-            response = requests.post(
-                url,
-                data={"data": json.dumps(data)},
-                files={"verification_document": file},
-                headers={"X-Mock-Api-Key": settings.MOCK_API_WRITE_TOKEN},
-                timeout=15,
-            )
-        if response.status_code != 201:
-            return False
-
-        hasil = response.json()
-        product.external_product_id = hasil["data"]["product_id"]
-        product.save()
-        return True
-    except Exception:
-        return False
+    return sync_product_to_mock_api(product)
 
 
 def cek_status(product):
     if not product.external_product_id:
         kirim_ke_api(product)
         return
-
-    url = settings.MOCK_API_BASE_URL + "/api/products/" + product.external_product_id + "/"
-
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code != 200:
-            return
-
-        verification = response.json()["data"]["verification"]
-        if verification is None:
-            return
-
-        product.status = verification["status"]
-        product.verification_summary = verification["summary"] or ""
-        product.save()
-    except Exception:
-        return
+    refresh_product_status_from_mock_api(product)
 
 
 def get_role(user):
@@ -140,6 +97,7 @@ def delete_product(request, pk):
         product = get_object_or_404(Product, pk=pk, seller=profile)
 
     if request.method == "POST":
+        delete_product_from_mock_api(product)
         product.delete()
 
     return redirect("dashboard:show_dashboard_home")
@@ -178,9 +136,11 @@ def review_product_admin(request, pk):
         product.status = "verified"
         product.verification_summary = ""
         product.save()
+        sync_verification_decision_to_mock_api(product)
     elif action == "reject" and alasan:
         product.status = "rejected"
         product.verification_summary = alasan
         product.save()
+        sync_verification_decision_to_mock_api(product)
  
     return redirect("products:verification_queue")

@@ -7,6 +7,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import EcoFeature, Product
+from .integrations import (
+    delete_product_from_mock_api,
+    sync_product_to_mock_api as kirim_ke_api,
+    sync_verification_decision_to_mock_api,
+)
 from .permissions import IsSeller
 from .serializers import (
     EcoFeatureSerializer,
@@ -16,7 +21,6 @@ from .serializers import (
     ProductUpdateSerializer,
     ProductVerificationActionSerializer,
 )
-from .views import kirim_ke_api
 
 
 URUTAN_PRODUK = {
@@ -235,11 +239,13 @@ class ProductMineDetailAPIView(APIView):
     def delete(self, request, product_id):
         product = self.get_object(request, product_id)
         deleted_id = str(product.pk)
+        mock_api_deleted = delete_product_from_mock_api(product)
         product.delete()
         return Response(
             {
                 "detail": "Produk berhasil dihapus.",
                 "deleted_id": deleted_id,
+                "mock_api_deleted": mock_api_deleted,
             }
         )
 
@@ -315,13 +321,19 @@ class ProductVerificationDetailAPIView(APIView):
             product.status = "rejected"
             product.verification_summary = data["reason"]
         product.save(update_fields=["status", "verification_summary"])
+        mock_api_synced = sync_verification_decision_to_mock_api(product)
 
         product = self.get_object(product_id)
         output_serializer = ProductSellerSerializer(
             product,
             context={"request": request},
         )
-        return Response({"product": output_serializer.data})
+        return Response(
+            {
+                "product": output_serializer.data,
+                "mock_api_synced": mock_api_synced,
+            }
+        )
 
 class EcoFeatureListAPIView(APIView):
     permission_classes = [AllowAny]
