@@ -84,6 +84,54 @@ def _statistik_penjualan(profile=None, periode="bulanan"):
         "produk_terlaris": _produk_terlaris(sekarang),
     }
 
+
+def _ringkasan_penjual(profile):
+    from django.utils import timezone
+
+    hari_ini = timezone.localdate()
+    mulai_bulan = hari_ini.replace(day=1)
+    items_selesai = _item_penjualan(profile)
+    pendapatan_bulan = _total_pendapatan(
+        items_selesai.filter(order__created_at__date__gte=mulai_bulan)
+    )
+    mulai_minggu = hari_ini - timedelta(days=6)
+    harian = {
+        row["tanggal"]: row["total"]
+        for row in (
+            items_selesai.filter(order__created_at__date__gte=mulai_minggu)
+            .annotate(tanggal=TruncDate("order__created_at"))
+            .values("tanggal")
+            .annotate(
+                total=Sum(
+                    ExpressionWrapper(
+                        F("price") * F("quantity"),
+                        output_field=IntegerField(),
+                    )
+                )
+            )
+        )
+    }
+    nilai_tertinggi = max(harian.values(), default=0)
+    grafik = []
+    for offset in range(7):
+        tanggal = mulai_minggu + timedelta(days=offset)
+        nilai = harian.get(tanggal, 0)
+        grafik.append({
+            "label": NAMA_HARI[tanggal.weekday()],
+            "tanggal": tanggal,
+            "nilai": nilai,
+            "tinggi": round(nilai * 100 / nilai_tertinggi) if nilai_tertinggi else 0,
+            "tertinggi": bool(nilai_tertinggi and nilai == nilai_tertinggi),
+        })
+    return {
+        "ulasan": ringkasan_ulasan_toko(profile),
+        "jumlah_produk": Product.objects.filter(seller=profile).count(),
+        "jumlah_pesanan": _pesanan_toko(profile).count(),
+        "pendapatan_bulan": pendapatan_bulan,
+        "grafik": grafik,
+        "produk_terlaris": _produk_terlaris(items_selesai, batas=3),
+    }
+
 def show_dashboard_home(request):
     role = get_role(request.user)
 
@@ -180,45 +228,11 @@ def seller_summary(request):
     profile = getattr(request.user, "seller_profile", None)
     if profile is None:
         return redirect("dashboard:show_dashboard_home")
-    from django.utils import timezone
-
-    hari_ini = timezone.localdate()
-    mulai_bulan = hari_ini.replace(day=1)
-    items_selesai = _item_penjualan(profile)
-    pendapatan_bulan = _total_pendapatan(
-        items_selesai.filter(order__created_at__date__gte=mulai_bulan)
+    return render(
+        request,
+        "seller_summary.html",
+        {"name": profile.store_name, **_ringkasan_penjual(profile)},
     )
-    mulai_minggu = hari_ini - timedelta(days=6)
-    harian = {
-        row["tanggal"]: row["total"]
-        for row in (
-            items_selesai.filter(order__created_at__date__gte=mulai_minggu)
-            .annotate(tanggal=TruncDate("order__created_at"))
-            .values("tanggal")
-            .annotate(total=Sum(ExpressionWrapper(F("price") * F("quantity"), output_field=IntegerField())))
-        )
-    }
-    nilai_tertinggi = max(harian.values(), default=0)
-    grafik = []
-    for offset in range(7):
-        tanggal = mulai_minggu + timedelta(days=offset)
-        nilai = harian.get(tanggal, 0)
-        grafik.append({
-            "label": NAMA_HARI[tanggal.weekday()],
-            "tanggal": tanggal,
-            "nilai": nilai,
-            "tinggi": round(nilai * 100 / nilai_tertinggi) if nilai_tertinggi else 0,
-            "tertinggi": bool(nilai_tertinggi and nilai == nilai_tertinggi),
-        })
-    return render(request, "seller_summary.html", {
-        "name": profile.store_name,
-        "ulasan": ringkasan_ulasan_toko(profile),
-        "jumlah_produk": Product.objects.filter(seller=profile).count(),
-        "jumlah_pesanan": _pesanan_toko(profile).count(),
-        "pendapatan_bulan": pendapatan_bulan,
-        "grafik": grafik,
-        "produk_terlaris": _produk_terlaris(items_selesai, batas=3),
-    })
 
 def sales_report(request):
     tolak = _alihkan_bila_tak_berhak(request, {"seller", "admin"})
