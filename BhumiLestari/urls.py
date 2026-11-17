@@ -31,6 +31,7 @@ urlpatterns = [
     path("api/v1/dashboard/", include("apps.dashboard.api_urls")),
     path("api/v1/checkout/", include("apps.checkout.api_urls")),
     path("api/v1/products/", include("apps.products.api_urls")),
+    path("api/v1/users/", include("apps.users.api_urls")),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'rest_framework',
+    'rest_framework.authtoken',
     "cloudinary_storage",
     'django.contrib.staticfiles',
     "cloudinary",
@@ -248,3 +249,11 @@ if USE_CLOUDINARY:
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     }
 LOGIN_URL = 'users:login'
+
+# Web memakai session cookie, aplikasi mobile memakai header "Authorization: Token <key>".
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+}
