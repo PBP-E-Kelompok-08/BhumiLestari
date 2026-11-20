@@ -1,0 +1,111 @@
+{% load static %}
+{# Banner ilustrasi auth (langit krem + bukit + bunga) — disamakan dengan AuthHeader di aplikasi mobile #}
+<div class="auth-banner">
+    <svg class="auth-illustration" viewBox="0 0 470 660" role="img"
+         aria-label="BhumiLestari - Produk ramah lingkungan, untuk masa depan yang lebih baik.">
+        <defs>
+            <clipPath id="abCard"><rect width="470" height="660" rx="22"/></clipPath>
+            <clipPath id="abLogo"><circle cx="235" cy="190" r="70"/></clipPath>
+            <path id="abLeaf" d="M0 0Q9 -13 0 -26Q-9 -13 0 0Z"/>
+            <g id="abFlower">
+                <circle cx="0" cy="-4.4" r="3.6" fill="#fff"/>
+                <circle cx="4.2" cy="-1.4" r="3.6" fill="#fff"/>
+                <circle cx="2.6" cy="3.6" r="3.6" fill="#fff"/>
+                <circle cx="-2.6" cy="3.6" r="3.6" fill="#fff"/>
+                <circle cx="-4.2" cy="-1.4" r="3.6" fill="#fff"/>
+                <circle r="2.5" fill="#E8C468"/>
+            </g>
+            <g id="abCloud">
+                <circle cx="-16" cy="6" r="11"/>
+                <circle cx="0" cy="0" r="15"/>
+                <circle cx="16" cy="5" r="12"/>
+                <rect x="-16" y="4" width="32" height="13"/>
+            </g>
+            <g id="abBird">
+                <path d="M-7 0Q-3.5 -4 0 0Q3.5 -4 7 0" fill="none" stroke="#6E6A50"
+                      stroke-width="1.3" stroke-linecap="round"/>
+            </g>
+        </defs>
+
+        <g clip-path="url(#abCard)">
+            <!-- Langit -->
+            <rect width="470" height="660" fill="#F2EDC9"/>
+
+            <!-- Cahaya melingkar di belakang logo -->
+            <circle cx="235" cy="190" r="290" fill="#fff" fill-opacity=".25"/>
+            <circle cx="235" cy="190" r="205" fill="#fff" fill-opacity=".35"/>
+            <circle cx="235" cy="190" r="140" fill="#fff" fill-opacity=".5"/>
+
+            <!-- Lingkaran putus-putus -->
+            <circle cx="235" cy="190" r="112" fill="none" stroke="#CFC69A" stroke-width="2.4"
+                    stroke-linecap="round" stroke-dasharray="0 13.68"/>
+
+            <!-- Burung -->
+            <use href="#abBird" transform="translate(58 250) scale(1.3)"/>
+            <use href="#abBird" transform="translate(70 266) scale(1)"/>
+            <use href="#abBird" transform="translate(378 92) scale(1.5)"/>
+            <use href="#abBird" transform="translate(404 114) scale(1.2)"/>
+
+            <!-- Logo -->
+            <image href="{% static 'img/logo.png' %}" x="160" y="115" width="150" height="150"
+                   clip-path="url(#abLogo)" preserveAspectRatio="xMidYMid slice"/>
+
+            <!-- Judul & tagline -->
+            <text x="235" y="340" text-anchor="middle" class="ab-title">BhumiLestari</text>
+            <text x="235" y="384" text-anchor="middle" class="ab-sub">Produk ramah lingkungan,</text>
+            <text x="235" y="412" text-anchor="middle" class="ab-sub">untuk masa depan yang lebih baik.</text>
+
+            <!-- Awan -->
+            <g fill="#fff" fill-opacity=".9">
+                <use href="#abCloud" transform="translate(52 470) scale(1.35)"/>
+                <use href="#abCloud" transform="translate(395 446) scale(1.55)"/>
+            </g>
+
+            <!-- Bukit (belakang -> depan) -->
+            <path d="M0 478C141 458 306 512 470 478V660H0Z" fill="#DDE3B1"/>
+            <!-- Semak belakang -->
+            <g fill="#8FA864">
+                <circle cx="128" cy="496" r="11"/><circle cx="145" cy="490" r="14"/><circle cx="162" cy="497" r="10"/>
+                <circle cx="342" cy="486" r="11"/><circle cx="359" cy="481" r="9"/>
+            </g>
+            <path d="M0 512C165 540 329 488 470 522V660H0Z" fill="#C8D697"/>
+            <path d="M0 556C188 540 329 582 470 550V660H0Z" fill="#B2C77F"/>
+            <path d="M0 604C141 590 282 622 470 596V660H0Z" fill="#9AB06A"/>
+            <path d="M0 640C160 628 320 650 470 634V660H0Z" fill="#7E9A55"/>
+
+            <!-- Bunga kecil -->
+            <use href="#abFlower" x="80" y="540"/>
+            <use href="#abFlower" x="150" y="532"/>
+            <use href="#abFlower" x="230" y="542"/>
+            <use href="#abFlower" x="310" y="534"/>
+            <use href="#abFlower" x="385" y="544"/>
+            <use href="#abFlower" x="60" y="588"/>
+            <use href="#abFlower" x="140" y="596"/>
+            <use href="#abFlower" x="218" y="584"/>
+            <use href="#abFlower" x="300" y="592"/>
+            <use href="#abFlower" x="372" y="584"/>
+            <use href="#abFlower" x="120" y="626"/>
+            <use href="#abFlower" x="260" y="630"/>
+            <use href="#abFlower" x="340" y="624"/>
+
+            <!-- Tanaman kiri -->
+            <g fill="#5E7C4E">
+                <path d="M30 660Q22 580 44 500" fill="none" stroke="#5E7C4E" stroke-width="3"/>
+                <use href="#abLeaf" transform="translate(29 630) rotate(55) scale(1.3)"/>
+                <use href="#abLeaf" transform="translate(27 600) rotate(-55) scale(1.2)"/>
+                <use href="#abLeaf" transform="translate(30 568) rotate(50) scale(1.1)"/>
+                <use href="#abLeaf" transform="translate(35 538) rotate(-45) scale(1)"/>
+                <use href="#abLeaf" transform="translate(44 500) rotate(10) scale(.8)"/>
+            </g>
+            <!-- Tanaman kanan -->
+            <g fill="#5E7C4E">
+                <path d="M440 660Q448 590 428 520" fill="none" stroke="#5E7C4E" stroke-width="3"/>
+                <use href="#abLeaf" transform="translate(441 632) rotate(-55) scale(1.3)"/>
+                <use href="#abLeaf" transform="translate(443 604) rotate(55) scale(1.2)"/>
+                <use href="#abLeaf" transform="translate(440 574) rotate(-50) scale(1.1)"/>
+                <use href="#abLeaf" transform="translate(435 548) rotate(45) scale(1)"/>
+                <use href="#abLeaf" transform="translate(428 520) rotate(-10) scale(.8)"/>
+            </g>
+        </g>
+    </svg>
+</div>
