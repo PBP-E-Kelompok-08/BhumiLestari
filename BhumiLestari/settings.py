@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-la3ur3xug26a^4@yn1$!z&4h-2%&1j(wa2y8yn_socc05q=2dk
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "sultan-noor-bhumilestari.pws.cs.ui.ac.id"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.0.2.2", "sultan-noor-bhumilestari.pws.cs.ui.ac.id"]
 
 
 # Application definition
@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'apps.products',
     'apps.users',
     'apps.reviews',
+
+    'corsheaders',
 ]
 
 # Untuk Login/SignUp
@@ -62,6 +64,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = f"BhumiLestari <{EMAIL_HOST_USER}>"
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -180,3 +183,10 @@ MOCK_API_BASE_URL = os.environ.get(
 )
 
 LOGIN_URL = 'users:login'
+
+# CORS untuk aplikasi mobile Flutter (flutter run -d chrome jalan di localhost dengan port acak)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost(:\d+)?$",
+    r"^http://127\.0\.0\.1(:\d+)?$",
+]
+CORS_ALLOW_CREDENTIALS = True

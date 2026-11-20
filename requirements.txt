@@ -6,3 +6,4 @@ requests
 urllib3
 python-dotenv
 pillow~=13.0
+django-cors-headers
