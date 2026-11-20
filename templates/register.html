@@ -7,22 +7,17 @@
     <title>Sign Up - BhumiLestari</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Hanuman:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Lora&family=Roboto+Slab:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/auth.css' %}">
-    <link rel="preload" as="image" href="{% static 'img/banner.png' %}">
     <link rel="expect" href="#authCard" blocking="render">
 </head>
 <body>
     <div class="auth-card" id="authCard">
 
-        <div class="auth-banner">
-            <img src="{% static 'img/banner.png' %}"
-                 alt="BhumiLestari - Produk ramah lingkungan, untuk masa depan yang lebih baik.">
-        </div>
+        {% include 'components/auth_banner.html' %}
 
         <div class="auth-form-wrap">
-            <h1 class="auth-heading"><span class="accent">Create</span> Account</h1>
-            <p class="auth-sub">Daftar dan mulai belanja produk ramah lingkungan</p>
+            <h1 class="sr-only">Create Account</h1>
 
             {% if messages %}
                 {% for message in messages %}
