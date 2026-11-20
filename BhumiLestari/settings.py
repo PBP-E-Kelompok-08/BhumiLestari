@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     'apps.products',
     'apps.users',
     'apps.reviews',
+
+    'corsheaders',
 ]
 
 # Untuk Login/SignUp
@@ -68,6 +70,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = f"BhumiLestari <{EMAIL_HOST_USER}>"
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -257,3 +260,11 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.TokenAuthentication",
     ],
 }
+
+# CORS untuk aplikasi mobile Flutter versi web (flutter run -d chrome),
+# yang jalan di localhost dengan port acak. Auth pakai header Token,
+# jadi tidak perlu CORS_ALLOW_CREDENTIALS.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost(:\d+)?$",
+    r"^http://127\.0\.0\.1(:\d+)?$",
+]
